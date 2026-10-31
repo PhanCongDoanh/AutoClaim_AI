@@ -1,0 +1,60 @@
+# ==========================================
+# 1. Cấu hình hệ thống & Editor (Chung cho dự án)
+# ==========================================
+.idea/
+*.iml
+*.iws
+*.ipr
+/shelf/
+/workspace.xml
+/httpRequests/
+/queries/
+/dataSources/
+/dataSources.local.xml
+.vscode/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ==========================================
+# 2. Quét rác của Backend (Java/Spring Boot)
+# ==========================================
+**/target/
+**/.mvn/
+**/mvnw
+**/mvnw.cmd
+**/.metadata/
+**/.apt_generated
+**/.classpath
+**/.factorypath
+**/.project
+**/.settings
+**/.springBeans
+**/.sts4-cache
+**/build/
+
+# ==========================================
+# 3. Quét rác của Frontend (Vite/Node/React)
+# ==========================================
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/*.local
+**/logs/
+**/*.log
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+**/lerna-debug.log*
+
+# ==========================================
+# 4. Dự phòng cho AI Service sau này (Python)
+# ==========================================
+**/__pycache__/
+**/*.pyc
+**/venv/
+**/.pytest_cache/
