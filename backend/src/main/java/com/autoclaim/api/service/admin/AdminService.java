@@ -1,7 +1,7 @@
 package com.autoclaim.api.service.admin;
 
 import com.autoclaim.api.dto.request.CreateStaffRequest;
-import com.autoclaim.api.dto.request.CreateVehicleRequest;
+import com.autoclaim.api.dto.request.UpdateStaffRequest;
 import com.autoclaim.api.dto.response.StaffResponseDto;
 import com.autoclaim.api.dto.response.VehicleResponseDto;
 import com.autoclaim.api.entity.Role;
@@ -10,6 +10,7 @@ import com.autoclaim.api.entity.Vehicle;
 import com.autoclaim.api.entity.enums.RoleName;
 import com.autoclaim.api.entity.enums.VehicleStatus;
 import com.autoclaim.api.exception.BadRequestException;
+import com.autoclaim.api.exception.FileProcessingException;
 import com.autoclaim.api.exception.ResourceNotFoundException;
 import com.autoclaim.api.repository.RoleRepository;
 import com.autoclaim.api.repository.UserRepository;
@@ -19,7 +20,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -49,23 +53,64 @@ public class AdminService {
     }
 
     @Transactional
-    public VehicleResponseDto createVehicle(CreateVehicleRequest request) {
-        String licensePlate = request.licensePlate().trim();
-        if (vehicleRepository.existsByLicensePlateIgnoreCase(licensePlate)) {
-            throw new BadRequestException("Vehicle with license plate '%s' already exists".formatted(licensePlate));
+    public VehicleResponseDto createVehicle(
+            String model,
+            String licensePlate,
+            Integer seats,
+            MultipartFile avatar) {
+
+        validateVehicleInputs(model, licensePlate);
+        String trimmedPlate = licensePlate.trim();
+
+        if (vehicleRepository.existsByLicensePlateIgnoreCase(trimmedPlate)) {
+            throw new BadRequestException("Vehicle with license plate '%s' already exists".formatted(trimmedPlate));
         }
 
-        int seats = (request.seats() != null && request.seats() > 0) ? request.seats() : 5;
+        int finalSeats = (seats != null && seats > 0) ? seats : 5;
+        byte[] avatarBytes = extractAvatarBytes(avatar);
 
         Vehicle vehicle = Vehicle.builder()
-                .model(request.model().trim())
-                .licensePlate(licensePlate)
-                .seats(seats)
+                .model(model.trim())
+                .licensePlate(trimmedPlate)
+                .seats(finalSeats)
+                .avatarData(avatarBytes)
                 .status(VehicleStatus.AVAILABLE)
                 .isDeleted(false)
                 .build();
 
         return VehicleResponseDto.fromEntity(vehicleRepository.saveAndFlush(vehicle));
+    }
+
+    @Transactional
+    public VehicleResponseDto updateVehicle(
+            UUID vehicleId,
+            String model,
+            String licensePlate,
+            Integer seats,
+            MultipartFile avatar) {
+
+        validateVehicleInputs(model, licensePlate);
+        String trimmedPlate = licensePlate.trim();
+
+        Vehicle vehicle = vehicleRepository.findByVehicleIdAndIsDeletedFalse(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle", vehicleId));
+
+        if (vehicleRepository.existsByLicensePlateIgnoreCaseAndVehicleIdNot(trimmedPlate, vehicleId)) {
+            throw new BadRequestException("Vehicle with license plate '%s' already exists".formatted(trimmedPlate));
+        }
+
+        vehicle.setModel(model.trim());
+        vehicle.setLicensePlate(trimmedPlate);
+        if (seats != null && seats > 0) {
+            vehicle.setSeats(seats);
+        }
+
+        byte[] avatarBytes = extractAvatarBytes(avatar);
+        if (avatarBytes != null) {
+            vehicle.setAvatarData(avatarBytes);
+        }
+
+        return vehicleService.toVehicleResponseDto(vehicleRepository.saveAndFlush(vehicle));
     }
 
     @Transactional
@@ -95,6 +140,23 @@ public class AdminService {
     }
 
     @Transactional
+    public StaffResponseDto updateStaff(UUID userId, UpdateStaffRequest request) {
+        User user = userRepository.findByUserIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Staff User", userId));
+
+        user.setName(request.name().trim());
+        user.setPhone(request.phone() != null ? request.phone().trim() : null);
+
+        if (request.roleName() != null) {
+            Role role = roleRepository.findByRoleName(request.roleName())
+                    .orElseThrow(() -> new ResourceNotFoundException("Role", request.roleName()));
+            user.setRole(role);
+        }
+
+        return StaffResponseDto.fromEntity(userRepository.saveAndFlush(user));
+    }
+
+    @Transactional
     public void deleteVehicle(UUID vehicleId) {
         Vehicle vehicle = vehicleRepository.findByVehicleIdAndIsDeletedFalse(vehicleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle", vehicleId));
@@ -115,5 +177,25 @@ public class AdminService {
 
         user.setIsDeleted(true);
         userRepository.saveAndFlush(user);
+    }
+
+    private void validateVehicleInputs(String model, String licensePlate) {
+        if (!StringUtils.hasText(model)) {
+            throw new BadRequestException("Vehicle model is required");
+        }
+        if (!StringUtils.hasText(licensePlate)) {
+            throw new BadRequestException("License plate is required");
+        }
+    }
+
+    private byte[] extractAvatarBytes(MultipartFile avatar) {
+        if (avatar == null || avatar.isEmpty()) {
+            return null;
+        }
+        try {
+            return avatar.getBytes();
+        } catch (IOException ex) {
+            throw new FileProcessingException("Failed to convert vehicle avatar image to byte[]", ex);
+        }
     }
 }

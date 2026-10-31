@@ -23,4 +23,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
     Optional<Vehicle> findByVehicleIdAndIsDeletedFalse(UUID vehicleId);
 
     boolean existsByLicensePlateIgnoreCase(String licensePlate);
+
+    boolean existsByLicensePlateIgnoreCaseAndVehicleIdNot(String licensePlate, UUID vehicleId);
 }
