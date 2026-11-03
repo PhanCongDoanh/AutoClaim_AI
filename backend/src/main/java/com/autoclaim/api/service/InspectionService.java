@@ -22,4 +22,6 @@ public interface InspectionService {
     byte[] getImageBytes(UUID imageId);
 
     Map<String, Object> overrideDamage(UUID detectionId, OverrideDamageRequest request);
+
+    InspectionResponseDto completeInspection(UUID sessionId);
 }

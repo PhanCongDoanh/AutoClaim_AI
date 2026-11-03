@@ -5,13 +5,9 @@ import com.autoclaim.api.entity.DamageDetection;
 import com.autoclaim.api.entity.InspectionSession;
 import com.autoclaim.api.entity.Renter;
 import com.autoclaim.api.entity.Vehicle;
-import com.autoclaim.api.entity.enums.BookingStatus;
-import com.autoclaim.api.entity.enums.VehicleStatus;
 import com.autoclaim.api.exception.ResourceNotFoundException;
-import com.autoclaim.api.repository.BookingRepository;
 import com.autoclaim.api.repository.DamageDetectionRepository;
 import com.autoclaim.api.repository.InspectionSessionRepository;
-import com.autoclaim.api.repository.VehicleRepository;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
@@ -38,6 +34,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ReportService {
 
     private static final DateTimeFormatter DATE_FORMATTER =
@@ -45,10 +42,7 @@ public class ReportService {
 
     private final InspectionSessionRepository inspectionSessionRepository;
     private final DamageDetectionRepository damageDetectionRepository;
-    private final VehicleRepository vehicleRepository;
-    private final BookingRepository bookingRepository;
 
-    @Transactional(rollbackFor = Exception.class)
     public byte[] generateInspectionReport(UUID sessionId) {
         InspectionSession session = inspectionSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("InspectionSession", sessionId));
@@ -57,32 +51,21 @@ public class ReportService {
         Renter renter = booking.getRenter();
         Vehicle vehicle = booking.getVehicle();
 
-        // Filter out any damage where isOverridden == true
+        // Filter out any damage where isOverridden == true (strictly read-only)
         List<DamageDetection> validDamages = damageDetectionRepository
                 .findByImage_Session_SessionId(sessionId)
                 .stream()
                 .filter(damage -> !Boolean.TRUE.equals(damage.getIsOverridden()))
                 .toList();
 
-        // Business Rule: If valid damages exist -> MAINTENANCE, otherwise -> AVAILABLE
-        VehicleStatus newVehicleStatus = validDamages.isEmpty()
-                ? VehicleStatus.AVAILABLE
-                : VehicleStatus.MAINTENANCE;
-        vehicle.setStatus(newVehicleStatus);
-        vehicleRepository.saveAndFlush(vehicle);
-
-        booking.setStatus(BookingStatus.COMPLETED);
-        bookingRepository.saveAndFlush(booking);
-
-        return buildPdfDocument(session, renter, vehicle, validDamages, newVehicleStatus);
+        return buildPdfDocument(session, renter, vehicle, validDamages);
     }
 
     private byte[] buildPdfDocument(
             InspectionSession session,
             Renter renter,
             Vehicle vehicle,
-            List<DamageDetection> validDamages,
-            VehicleStatus finalVehicleStatus) {
+            List<DamageDetection> validDamages) {
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Document document = new Document(PageSize.A4, 40, 40, 40, 40);
@@ -115,7 +98,7 @@ public class ReportService {
                     renter.getPhoneNumber() != null ? renter.getPhoneNumber() : "N/A", labelFont, bodyFont));
             document.add(createInfoLine("Vehicle License Plate: ", vehicle.getLicensePlate(), labelFont, bodyFont));
             document.add(createInfoLine("Vehicle Model: ", vehicle.getModel(), labelFont, bodyFont));
-            document.add(createInfoLine("Updated Vehicle Status: ", finalVehicleStatus.name(), labelFont, bodyFont));
+            document.add(createInfoLine("Vehicle Status: ", vehicle.getStatus().name(), labelFont, bodyFont));
 
             Paragraph spacer = new Paragraph(" ");
             spacer.setSpacingAfter(10f);
@@ -129,15 +112,16 @@ public class ReportService {
 
             if (validDamages.isEmpty()) {
                 Paragraph noDamages = new Paragraph(
-                        "No valid exterior damages detected. Vehicle status returned to AVAILABLE.", bodyFont);
+                        "No valid exterior damages detected.", bodyFont);
                 document.add(noDamages);
             } else {
-                PdfPTable table = new PdfPTable(new float[]{1.2f, 2.2f, 3.0f, 2.0f, 3.6f});
+                PdfPTable table = new PdfPTable(new float[]{1.0f, 2.0f, 2.5f, 2.5f, 1.8f, 3.2f});
                 table.setWidthPercentage(100);
                 table.setSpacingBefore(5f);
 
                 addTableHeader(table, "#", labelFont);
                 addTableHeader(table, "Angle", labelFont);
+                addTableHeader(table, "Part", labelFont);
                 addTableHeader(table, "Damage Type", labelFont);
                 addTableHeader(table, "Confidence", labelFont);
                 addTableHeader(table, "Bounding Box", labelFont);
@@ -150,6 +134,8 @@ public class ReportService {
                                     ? d.getImage().getAngleCode().name()
                                     : "N/A",
                             bodyFont)));
+                    table.addCell(new PdfPCell(new Phrase(
+                            d.getPartName() != null ? d.getPartName() : "N/A", bodyFont)));
                     table.addCell(new PdfPCell(new Phrase(d.getDamageType(), bodyFont)));
                     double scorePct = d.getConfidenceScore() != null
                             ? (d.getConfidenceScore() <= 1.0 ? d.getConfidenceScore() * 100.0 : d.getConfidenceScore())

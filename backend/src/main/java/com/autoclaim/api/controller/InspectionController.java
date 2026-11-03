@@ -36,7 +36,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/inspections")
 @RequiredArgsConstructor
-@Tag(name = "Inspections", description = "Vehicle check-in, check-out, AI results, damage override, and PDF report endpoints")
+@Tag(name = "Inspections", description = "Vehicle check-in, check-out, AI results, damage override, completion, and PDF report endpoints")
 public class InspectionController {
 
     private final InspectionService inspectionService;
@@ -137,8 +137,17 @@ public class InspectionController {
     }
 
     @Operation(
-            summary = "Generate PDF Inspection Report",
-            description = "Generates a PDF report for the inspection session and updates vehicle status to MAINTENANCE (if valid damages exist) or AVAILABLE (if none)."
+            summary = "Complete Check-Out Inspection",
+            description = "Finalizes a CHECK_OUT inspection session: sets Booking status to COMPLETED and updates Vehicle status to MAINTENANCE (if valid damages exist) or AVAILABLE (if none)."
+    )
+    @PostMapping("/{sessionId}/complete")
+    public ResponseEntity<InspectionResponseDto> completeInspection(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(inspectionService.completeInspection(sessionId));
+    }
+
+    @Operation(
+            summary = "Generate PDF Inspection Report (Read-Only)",
+            description = "Generates and returns the PDF inspection report without mutating Vehicle or Booking state."
     )
     @GetMapping(value = "/{sessionId}/report", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> generateReport(@PathVariable UUID sessionId) {

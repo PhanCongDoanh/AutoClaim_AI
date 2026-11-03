@@ -278,6 +278,56 @@ public class InspectionServiceImpl implements InspectionService {
         return response;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public InspectionResponseDto completeInspection(UUID sessionId) {
+        InspectionSession session = inspectionSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("InspectionSession", sessionId));
+
+        if (session.getSessionType() != SessionType.CHECK_OUT) {
+            throw new BadRequestException(
+                    "Only CHECK_OUT sessions can be completed (session %s is %s)"
+                            .formatted(sessionId, session.getSessionType()));
+        }
+
+        Booking booking = session.getBooking();
+        Vehicle vehicle = booking.getVehicle();
+
+        List<DamageDetection> validDamages = damageDetectionRepository
+                .findByImage_Session_SessionId(sessionId)
+                .stream()
+                .filter(damage -> !Boolean.TRUE.equals(damage.getIsOverridden()))
+                .toList();
+
+        VehicleStatus newVehicleStatus = validDamages.isEmpty()
+                ? VehicleStatus.AVAILABLE
+                : VehicleStatus.MAINTENANCE;
+
+        vehicle.setStatus(newVehicleStatus);
+        vehicle = vehicleRepository.saveAndFlush(vehicle);
+
+        booking.setStatus(BookingStatus.COMPLETED);
+        booking = bookingRepository.saveAndFlush(booking);
+
+        int imageCount = inspectionImageRepository.findBySession_SessionId(sessionId).size();
+        String message = validDamages.isEmpty()
+                ? "Inspection completed. No valid damages found; vehicle status set to AVAILABLE."
+                : "Inspection completed with %d valid damage(s); vehicle status set to MAINTENANCE."
+                        .formatted(validDamages.size());
+
+        return InspectionResponseDto.builder()
+                .sessionId(session.getSessionId())
+                .bookingId(booking.getBookingId())
+                .vehicleId(vehicle.getVehicleId())
+                .sessionType(session.getSessionType())
+                .bookingStatus(booking.getStatus())
+                .vehicleStatus(vehicle.getStatus())
+                .imageCount(imageCount)
+                .createdAt(session.getCreatedAt())
+                .message(message)
+                .build();
+    }
+
     private boolean triggerAiDetection(UUID sessionId) {
         try {
             HttpHeaders headers = new HttpHeaders();
