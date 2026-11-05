@@ -19,7 +19,6 @@ import com.autoclaim.api.entity.enums.BookingStatus;
 import com.autoclaim.api.entity.enums.SessionType;
 import com.autoclaim.api.entity.enums.VehicleStatus;
 import com.autoclaim.api.exception.BadRequestException;
-import com.autoclaim.api.exception.FileProcessingException;
 import com.autoclaim.api.exception.ResourceNotFoundException;
 import com.autoclaim.api.repository.BookingRepository;
 import com.autoclaim.api.repository.DamageDetectionRepository;
@@ -43,7 +42,6 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -90,6 +88,7 @@ public class InspectionServiceImpl implements InspectionService {
     private final DamageDetectionRepository damageDetectionRepository;
     private final UserRepository userRepository;
     private final RestTemplate restTemplate;
+    private final S3StorageService s3StorageService;
 
     @Value("${app.ai.detect-url:http://localhost:5000/api/ai/detect}")
     private String aiDetectUrl;
@@ -139,7 +138,7 @@ public class InspectionServiceImpl implements InspectionService {
                 .build();
         session = inspectionSessionRepository.saveAndFlush(session);
 
-        // d. Loop through the 10 MultipartFiles, convert to byte[], and save them into inspection_images
+        // d. Upload the 10 MultipartFiles to S3 and save their URLs into inspection_images
         List<InspectionImage> savedImages = saveInspectionImages(session, images, CHECK_IN_ANGLES);
 
         return InspectionResponseDto.builder()
@@ -180,7 +179,7 @@ public class InspectionServiceImpl implements InspectionService {
                 .build();
         session = inspectionSessionRepository.saveAndFlush(session);
 
-        // c. Convert and save the 8 images to inspection_images (ANGLE_1 to ANGLE_8) as byte[]
+        // c. Upload the 8 images to S3 (ANGLE_1 to ANGLE_8) and save their URLs
         List<InspectionImage> savedImages = saveInspectionImages(session, images, CHECK_OUT_ANGLES);
 
         // d. AI Trigger: POST {"sessionId": "<the_new_session_id>"} to http://localhost:5000/api/ai/detect
@@ -210,8 +209,8 @@ public class InspectionServiceImpl implements InspectionService {
         InspectionSession session = inspectionSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("InspectionSession", sessionId));
 
-        // Build angleCode -> checkInImageId map for the side-by-side comparison slider
-        Map<AngleCode, UUID> checkInImageByAngle = new EnumMap<>(AngleCode.class);
+        // Build angleCode -> check-in image map for the side-by-side comparison slider
+        Map<AngleCode, InspectionImage> checkInImageByAngle = new EnumMap<>(AngleCode.class);
         UUID bookingId = session.getBooking().getBookingId();
         inspectionSessionRepository.findFirstByBooking_BookingIdAndSessionTypeOrderByCreatedAtDesc(
                         bookingId, SessionType.CHECK_IN)
@@ -219,7 +218,7 @@ public class InspectionServiceImpl implements InspectionService {
                     for (InspectionImage checkInImg : inspectionImageRepository.findBySession_SessionId(
                             checkInSession.getSessionId())) {
                         if (checkInImg.getAngleCode() != null) {
-                            checkInImageByAngle.putIfAbsent(checkInImg.getAngleCode(), checkInImg.getImageId());
+                            checkInImageByAngle.putIfAbsent(checkInImg.getAngleCode(), checkInImg);
                         }
                     }
                 });
@@ -233,9 +232,13 @@ public class InspectionServiceImpl implements InspectionService {
                             .map(DamageDto::fromEntity)
                             .toList();
 
+                    InspectionImage checkInImage = checkInImageByAngle.get(image.getAngleCode());
+
                     return ImageResultDto.builder()
                             .imageId(image.getImageId())
-                            .checkInImageId(checkInImageByAngle.get(image.getAngleCode()))
+                            .imageUrl(image.getImageUrl())
+                            .checkInImageId(checkInImage != null ? checkInImage.getImageId() : null)
+                            .checkInImageUrl(checkInImage != null ? checkInImage.getImageUrl() : null)
                             .angleCode(image.getAngleCode())
                             .damages(damages)
                             .build();
@@ -252,10 +255,13 @@ public class InspectionServiceImpl implements InspectionService {
 
     @Override
     @Transactional(readOnly = true)
-    public byte[] getImageBytes(UUID imageId) {
+    public String getImageUrl(UUID imageId) {
         InspectionImage image = inspectionImageRepository.findById(imageId)
                 .orElseThrow(() -> new ResourceNotFoundException("InspectionImage", imageId));
-        return image.getImageData();
+        if (!StringUtils.hasText(image.getImageUrl())) {
+            throw new ResourceNotFoundException("Image URL for InspectionImage", imageId);
+        }
+        return image.getImageUrl();
     }
 
     @Override
@@ -367,28 +373,30 @@ public class InspectionServiceImpl implements InspectionService {
             List<MultipartFile> files,
             List<AngleCode> angleCodes) {
 
+        String folder = "inspections/" + session.getSessionId();
+        List<String> uploadedUrls = new ArrayList<>(angleCodes.size());
         List<InspectionImage> entities = new ArrayList<>(angleCodes.size());
-        for (int i = 0; i < angleCodes.size(); i++) {
-            MultipartFile file = files.get(i);
-            AngleCode angleCode = angleCodes.get(i);
-            byte[] imageBytes = toByteArray(file, angleCode, i);
 
-            entities.add(InspectionImage.builder()
-                    .session(session)
-                    .angleCode(angleCode)
-                    .imageData(imageBytes)
-                    .build());
-        }
-        return inspectionImageRepository.saveAllAndFlush(entities);
-    }
-
-    private byte[] toByteArray(MultipartFile file, AngleCode angleCode, int index) {
         try {
-            return file.getBytes();
-        } catch (IOException ex) {
-            throw new FileProcessingException(
-                    "Failed to convert image at index %d (%s) to byte[]".formatted(index, angleCode), ex);
+            for (int i = 0; i < angleCodes.size(); i++) {
+                String imageUrl = s3StorageService.uploadFile(files.get(i), folder);
+                uploadedUrls.add(imageUrl);
+
+                entities.add(InspectionImage.builder()
+                        .session(session)
+                        .angleCode(angleCodes.get(i))
+                        .imageUrl(imageUrl)
+                        .build());
+            }
+        } catch (RuntimeException ex) {
+            // A mid-batch failure: remove the files that already made it to the bucket.
+            uploadedUrls.forEach(s3StorageService::deleteFileByUrl);
+            throw ex;
         }
+
+        // If the DB transaction later rolls back, remove the uploaded files as well.
+        s3StorageService.deleteOnRollback(uploadedUrls);
+        return inspectionImageRepository.saveAllAndFlush(entities);
     }
 
     private User resolveCurrentStaff() {

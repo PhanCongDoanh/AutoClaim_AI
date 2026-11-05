@@ -9,7 +9,9 @@ import java.util.UUID;
 @Builder
 public record ImageResultDto(
         UUID imageId,
+        String imageUrl,
         UUID checkInImageId,
+        String checkInImageUrl,
         AngleCode angleCode,
         List<DamageDto> damages
 ) {

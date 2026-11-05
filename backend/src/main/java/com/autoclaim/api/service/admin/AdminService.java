@@ -10,11 +10,11 @@ import com.autoclaim.api.entity.Vehicle;
 import com.autoclaim.api.entity.enums.RoleName;
 import com.autoclaim.api.entity.enums.VehicleStatus;
 import com.autoclaim.api.exception.BadRequestException;
-import com.autoclaim.api.exception.FileProcessingException;
 import com.autoclaim.api.exception.ResourceNotFoundException;
 import com.autoclaim.api.repository.RoleRepository;
 import com.autoclaim.api.repository.UserRepository;
 import com.autoclaim.api.repository.VehicleRepository;
+import com.autoclaim.api.service.S3StorageService;
 import com.autoclaim.api.service.VehicleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,11 +31,14 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AdminService {
 
+    private static final String VEHICLE_AVATAR_FOLDER = "vehicles/avatars";
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final VehicleRepository vehicleRepository;
     private final VehicleService vehicleService;
     private final PasswordEncoder passwordEncoder;
+    private final S3StorageService s3StorageService;
 
     public List<StaffResponseDto> getAllStaff() {
         return userRepository.findByIsDeletedFalseOrderByCreatedAtDesc()
@@ -67,13 +69,13 @@ public class AdminService {
         }
 
         int finalSeats = (seats != null && seats > 0) ? seats : 5;
-        byte[] avatarBytes = extractAvatarBytes(avatar);
+        String avatarUrl = uploadAvatar(avatar);
 
         Vehicle vehicle = Vehicle.builder()
                 .model(model.trim())
                 .licensePlate(trimmedPlate)
                 .seats(finalSeats)
-                .avatarData(avatarBytes)
+                .avatarUrl(avatarUrl)
                 .status(VehicleStatus.AVAILABLE)
                 .isDeleted(false)
                 .build();
@@ -105,9 +107,11 @@ public class AdminService {
             vehicle.setSeats(seats);
         }
 
-        byte[] avatarBytes = extractAvatarBytes(avatar);
-        if (avatarBytes != null) {
-            vehicle.setAvatarData(avatarBytes);
+        String newAvatarUrl = uploadAvatar(avatar);
+        if (newAvatarUrl != null) {
+            // Remove the previous avatar from the bucket only once the new URL is committed.
+            s3StorageService.deleteAfterCommit(vehicle.getAvatarUrl());
+            vehicle.setAvatarUrl(newAvatarUrl);
         }
 
         return vehicleService.toVehicleResponseDto(vehicleRepository.saveAndFlush(vehicle));
@@ -188,14 +192,13 @@ public class AdminService {
         }
     }
 
-    private byte[] extractAvatarBytes(MultipartFile avatar) {
+    /** Uploads the avatar (if provided) and schedules its removal should the transaction roll back. */
+    private String uploadAvatar(MultipartFile avatar) {
         if (avatar == null || avatar.isEmpty()) {
             return null;
         }
-        try {
-            return avatar.getBytes();
-        } catch (IOException ex) {
-            throw new FileProcessingException("Failed to convert vehicle avatar image to byte[]", ex);
-        }
+        String url = s3StorageService.uploadFile(avatar, VEHICLE_AVATAR_FOLDER);
+        s3StorageService.deleteOnRollback(List.of(url));
+        return url;
     }
 }

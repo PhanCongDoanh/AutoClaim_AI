@@ -19,7 +19,7 @@ public interface InspectionService {
 
     SessionResultResponseDto getSessionResults(UUID sessionId);
 
-    byte[] getImageBytes(UUID imageId);
+    String getImageUrl(UUID imageId);
 
     Map<String, Object> overrideDamage(UUID detectionId, OverrideDamageRequest request);
 

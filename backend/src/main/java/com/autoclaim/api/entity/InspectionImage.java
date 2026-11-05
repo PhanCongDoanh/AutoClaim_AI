@@ -30,7 +30,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = {"session", "imageData"})
+@ToString(exclude = "session")
 public class InspectionImage {
 
     @Id
@@ -46,8 +46,8 @@ public class InspectionImage {
     @Column(name = "angle_code", nullable = false, length = 50)
     private AngleCode angleCode;
 
-    @Column(name = "image_data", nullable = false)
-    private byte[] imageData;
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

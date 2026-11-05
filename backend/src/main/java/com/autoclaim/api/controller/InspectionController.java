@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -110,19 +111,14 @@ public class InspectionController {
     }
 
     @Operation(
-            summary = "Get Inspection Image Bytes",
-            description = "Returns the raw binary image data (JPEG/PNG) for rendering in <img src=\"...\"> tags."
+            summary = "Get Inspection Image",
+            description = "Redirects (302) to the image's public URL in object storage, so <img src=\"/api/inspections/images/{id}\"> keeps working. Prefer using imageUrl from the results endpoint directly."
     )
-    @GetMapping(
-            value = "/images/{imageId}",
-            produces = {MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE}
-    )
-    public ResponseEntity<byte[]> getImage(@PathVariable UUID imageId) {
-        byte[] imageBytes = inspectionService.getImageBytes(imageId);
-        MediaType contentType = isPng(imageBytes) ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
-        return ResponseEntity.ok()
-                .contentType(contentType)
-                .body(imageBytes);
+    @GetMapping("/images/{imageId}")
+    public ResponseEntity<Void> getImage(@PathVariable UUID imageId) {
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create(inspectionService.getImageUrl(imageId)))
+                .build();
     }
 
     @Operation(
@@ -156,14 +152,5 @@ public class InspectionController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=inspection_report.pdf")
                 .body(pdfBytes);
-    }
-
-    private boolean isPng(byte[] bytes) {
-        return bytes != null
-                && bytes.length >= 4
-                && (bytes[0] & 0xFF) == 0x89
-                && (bytes[1] & 0xFF) == 0x50
-                && (bytes[2] & 0xFF) == 0x4E
-                && (bytes[3] & 0xFF) == 0x47;
     }
 }

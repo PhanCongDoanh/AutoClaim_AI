@@ -28,7 +28,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = "avatarData")
+@ToString
 public class Vehicle {
 
     @Id
@@ -51,8 +51,8 @@ public class Vehicle {
     @Column(name = "status", length = 50)
     private VehicleStatus status = VehicleStatus.AVAILABLE;
 
-    @Column(name = "avatar_data")
-    private byte[] avatarData;
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
 
     @Builder.Default
     @Column(name = "is_deleted", nullable = false)
