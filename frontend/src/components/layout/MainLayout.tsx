@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, ScrollRestoration } from 'react-router-dom'
 import Header from './Header'
 import Sidebar from './Sidebar'
 
@@ -24,6 +24,7 @@ export default function MainLayout() {
         <main className="flex-1 overflow-x-hidden p-4 lg:p-8">
           <Outlet />
         </main>
+        <ScrollRestoration />
       </div>
     </div>
   )

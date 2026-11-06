@@ -1,14 +1,10 @@
 import { Car, Loader2, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { adminService } from '../../services/adminService'
-import { getErrorMessage } from '../../services/apiClient'
-import type { VehicleResponse, VehicleStatus } from '../../types'
-
-const STATUS_BADGE: Record<VehicleStatus, string> = {
-  AVAILABLE: 'bg-emerald-50 text-emerald-700',
-  RENTED: 'bg-brand-50 text-brand-700',
-  MAINTENANCE: 'bg-amber-50 text-amber-700',
-}
+import { Button } from '@/components/ui/button'
+import { VehicleStatusBadge } from '@/components/vehicle/VehicleStatusBadge'
+import { adminService } from '@/services/adminService'
+import { getErrorMessage } from '@/services/apiClient'
+import type { VehicleResponse } from '@/types'
 
 export default function VehicleManagement() {
   const [vehicles, setVehicles] = useState<VehicleResponse[]>([])
@@ -40,13 +36,10 @@ export default function VehicleManagement() {
           <h1 className="text-2xl font-semibold text-slate-900">Vehicle Management</h1>
           <p className="text-sm text-slate-500">Manage the rental fleet.</p>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          <Plus className="h-4 w-4" />
+        <Button>
+          <Plus />
           Add vehicle
-        </button>
+        </Button>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -88,11 +81,7 @@ export default function VehicleManagement() {
                   <td className="px-4 py-3 font-mono">{vehicle.licensePlate}</td>
                   <td className="px-4 py-3">{vehicle.seats}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE[vehicle.status]}`}
-                    >
-                      {vehicle.status}
-                    </span>
+                    <VehicleStatusBadge status={vehicle.status} />
                   </td>
                 </tr>
               ))}
