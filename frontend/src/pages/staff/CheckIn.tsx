@@ -79,7 +79,7 @@ export default function CheckIn() {
       const state: DashboardLocationState = {
         checkedIn: { model: vehicle.model, licensePlate: vehicle.licensePlate },
       }
-      navigate('/', { replace: true, state })
+      navigate('/staff', { replace: true, state })
     } catch (err) {
       setSubmitError(getErrorMessage(err))
       setIsSubmitting(false)
@@ -90,7 +90,7 @@ export default function CheckIn() {
     <section className="mx-auto max-w-6xl space-y-6 pb-28">
       <div>
         <Button asChild variant="link" size="sm" className="h-auto px-0 text-muted-foreground">
-          <Link to="/">
+          <Link to="/staff">
             <ArrowLeft />
             Quay lại danh sách xe
           </Link>
@@ -144,7 +144,7 @@ export default function CheckIn() {
               }
             >
               <Button asChild variant="ghost">
-                <Link to="/">Hủy</Link>
+                <Link to="/staff">Hủy</Link>
               </Button>
               <Button onClick={handleContinue}>
                 Tiếp tục: Chụp 8 góc xe
@@ -197,7 +197,7 @@ function VehicleNotReady({ state }: { state: 'missing' | 'loading' | 'unavailabl
       ) : (
         <p className="text-sm text-muted-foreground">
           {state === 'missing' ? 'Chưa chọn xe. ' : 'Xe này không còn sẵn sàng cho thuê. '}
-          <Link to="/" className="font-medium text-primary hover:underline">
+          <Link to="/staff" className="font-medium text-primary hover:underline">
             Chọn một xe đang sẵn sàng
           </Link>{' '}
           từ danh sách.

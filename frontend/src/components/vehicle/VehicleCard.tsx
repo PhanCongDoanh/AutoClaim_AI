@@ -58,7 +58,7 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
       <CardFooter className="mt-auto">
         {status === 'AVAILABLE' && (
           <Button asChild className="w-full">
-            <Link to={`/check-in?vehicleId=${vehicleId}`}>
+            <Link to={`/staff/check-in?vehicleId=${vehicleId}`}>
               <LogIn />
               Check in
             </Link>
@@ -66,7 +66,7 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
         )}
         {status === 'RENTED' && vehicle.activeBookingId && (
           <Button asChild variant="secondary" className="w-full">
-            <Link to={`/check-out?bookingId=${vehicle.activeBookingId}`}>
+            <Link to={`/staff/check-out?bookingId=${vehicle.activeBookingId}`}>
               <LogOut />
               Check out
             </Link>
