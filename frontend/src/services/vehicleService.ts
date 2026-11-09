@@ -4,11 +4,11 @@ import type {
   VehicleQuery,
   VehicleResponse,
 } from '../types'
-import { apiClient } from './apiClient'
+import { axiosInstance } from '@/utils/axiosInstance'
 
 export const vehicleService = {
   async getVehicles(query: VehicleQuery): Promise<VehicleResponse[]> {
-    const { data } = await apiClient.get<VehicleResponse[]>('/vehicles', { params: query })
+    const { data } = await axiosInstance.get<VehicleResponse[]>('/vehicles', { params: query })
     return data
   },
 
@@ -16,7 +16,7 @@ export const vehicleService = {
     vehicleId: UUID,
     request?: CompleteMaintenanceRequest,
   ): Promise<VehicleResponse> {
-    const { data } = await apiClient.patch<VehicleResponse>(
+    const { data } = await axiosInstance.patch<VehicleResponse>(
       `/vehicles/${vehicleId}/complete-maintenance`,
       request,
     )

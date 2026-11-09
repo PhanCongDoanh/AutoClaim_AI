@@ -10,7 +10,7 @@ import java.util.UUID;
 @Builder
 public record StaffResponseDto(
         UUID userId,
-        String name,
+        String fullName,
         String email,
         String phone,
         RoleName roleName,
@@ -21,7 +21,7 @@ public record StaffResponseDto(
     public static StaffResponseDto fromEntity(User user) {
         return StaffResponseDto.builder()
                 .userId(user.getUserId())
-                .name(user.getName())
+                .fullName(user.getName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
                 .roleName(user.getRole() != null ? user.getRole().getRoleName() : null)

@@ -7,11 +7,12 @@ import type {
   SessionResultResponse,
   UUID,
 } from '../types'
-import { apiClient, buildInspectionFormData } from './apiClient'
+import { axiosInstance } from '@/utils/axiosInstance'
+import { buildInspectionFormData } from './apiClient'
 
 export const inspectionService = {
   async checkIn(request: CheckInRequest, images: File[]): Promise<InspectionResponse> {
-    const { data } = await apiClient.post<InspectionResponse>(
+    const { data } = await axiosInstance.post<InspectionResponse>(
       '/inspections/check-in',
       buildInspectionFormData(request, images),
     )
@@ -19,7 +20,7 @@ export const inspectionService = {
   },
 
   async checkOut(request: CheckOutRequest, images: File[]): Promise<InspectionResponse> {
-    const { data } = await apiClient.post<InspectionResponse>(
+    const { data } = await axiosInstance.post<InspectionResponse>(
       '/inspections/check-out',
       buildInspectionFormData(request, images),
     )
@@ -27,7 +28,7 @@ export const inspectionService = {
   },
 
   async getSessionResults(sessionId: UUID): Promise<SessionResultResponse> {
-    const { data } = await apiClient.get<SessionResultResponse>(
+    const { data } = await axiosInstance.get<SessionResultResponse>(
       `/inspections/${sessionId}/results`,
     )
     return data
@@ -37,7 +38,7 @@ export const inspectionService = {
     detectionId: UUID,
     request?: OverrideDamageRequest,
   ): Promise<MessageResponse> {
-    const { data } = await apiClient.patch<MessageResponse>(
+    const { data } = await axiosInstance.patch<MessageResponse>(
       `/inspections/damages/${detectionId}/override`,
       request,
     )
@@ -45,14 +46,14 @@ export const inspectionService = {
   },
 
   async completeInspection(sessionId: UUID): Promise<InspectionResponse> {
-    const { data } = await apiClient.post<InspectionResponse>(
+    const { data } = await axiosInstance.post<InspectionResponse>(
       `/inspections/${sessionId}/complete`,
     )
     return data
   },
 
   async downloadReport(sessionId: UUID): Promise<Blob> {
-    const { data } = await apiClient.get<Blob>(`/inspections/${sessionId}/report`, {
+    const { data } = await axiosInstance.get<Blob>(`/inspections/${sessionId}/report`, {
       responseType: 'blob',
     })
     return data
@@ -60,6 +61,6 @@ export const inspectionService = {
 
   /** The backend redirects this URL to the stored image, so it can be used directly in `<img src>`. */
   getImageUrl(imageId: UUID): string {
-    return `${apiClient.defaults.baseURL}/inspections/images/${imageId}`
+    return `${axiosInstance.defaults.baseURL}/inspections/images/${imageId}`
   },
 }

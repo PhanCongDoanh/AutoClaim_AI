@@ -106,14 +106,14 @@ public class AdminController {
         return ResponseEntity.ok(adminService.updateVehicle(id, model, licensePlate, seats, avatar));
     }
 
-    @Operation(summary = "Create a new staff user", description = "Creates a staff/admin user with auto-generated BCrypt password.")
+    @Operation(summary = "Create a new staff user", description = "Creates a staff/admin user from fullName, email, phone, password (stored BCrypt-hashed) and roleName.")
     @PostMapping("/staff")
     public ResponseEntity<StaffResponseDto> createStaff(@Valid @RequestBody CreateStaffRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(adminService.createStaff(request));
     }
 
-    @Operation(summary = "Update an existing staff user", description = "Updates a staff/admin user's name, phone, and roleName.")
+    @Operation(summary = "Update an existing staff user", description = "Updates a staff/admin user's fullName, phone, and roleName. Email and password cannot be changed here.")
     @PutMapping("/staff/{id}")
     public ResponseEntity<StaffResponseDto> updateStaff(
             @PathVariable UUID id,

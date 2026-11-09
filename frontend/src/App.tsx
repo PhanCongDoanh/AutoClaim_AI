@@ -1,6 +1,7 @@
 import { Link, Navigate, RouterProvider, createBrowserRouter } from 'react-router-dom'
 import MainLayout from './components/layout/MainLayout'
 import ProtectedRoute from './components/layout/ProtectedRoute'
+import { Toaster } from './components/ui/sonner'
 import { AuthProvider } from './contexts/AuthContext'
 import Login from './pages/Login'
 import StaffManagement from './pages/admin/StaffManagement'
@@ -61,6 +62,7 @@ export default function App() {
   return (
     <AuthProvider>
       <RouterProvider router={router} />
+      <Toaster />
     </AuthProvider>
   )
 }

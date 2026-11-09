@@ -26,7 +26,7 @@ const ERROR_MESSAGES: Record<LoginError, { title: string; description: string }>
 
 /** Returns the page the user was heading to, if their role may open it. */
 function getRedirectPath(user: User, from: string | undefined): string {
-  const home = ROLE_HOME_PATH[user.role]
+  const home = ROLE_HOME_PATH[user.roleName]
   return from?.startsWith(home) ? from : home
 }
 

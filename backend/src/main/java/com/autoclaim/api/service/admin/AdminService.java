@@ -128,15 +128,12 @@ public class AdminService {
         Role role = roleRepository.findByRoleName(roleName)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", roleName));
 
-        String rawPassword = UUID.randomUUID().toString();
-        String encodedPassword = passwordEncoder.encode(rawPassword);
-
         User user = User.builder()
                 .role(role)
-                .name(request.name().trim())
+                .name(request.fullName().trim())
                 .email(email)
-                .phone(request.phone() != null ? request.phone().trim() : null)
-                .password(encodedPassword)
+                .phone(trimToNull(request.phone()))
+                .password(passwordEncoder.encode(request.password()))
                 .isDeleted(false)
                 .build();
 
@@ -148,8 +145,8 @@ public class AdminService {
         User user = userRepository.findByUserIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Staff User", userId));
 
-        user.setName(request.name().trim());
-        user.setPhone(request.phone() != null ? request.phone().trim() : null);
+        user.setName(request.fullName().trim());
+        user.setPhone(trimToNull(request.phone()));
 
         if (request.roleName() != null) {
             Role role = roleRepository.findByRoleName(request.roleName())
@@ -190,6 +187,10 @@ public class AdminService {
         if (!StringUtils.hasText(licensePlate)) {
             throw new BadRequestException("License plate is required");
         }
+    }
+
+    private static String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     /** Uploads the avatar (if provided) and schedules its removal should the transaction roll back. */
