@@ -25,6 +25,13 @@ export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unexpected error'
 }
 
+/** Per-field messages from a Bean Validation 400 (`ErrorResponse.fieldErrors`), keyed by DTO field. */
+export function getFieldErrors(error: unknown): Record<string, string> {
+  if (!(error instanceof AxiosError)) return {}
+  const data = error.response?.data as Partial<ErrorResponse> | undefined
+  return data?.fieldErrors ?? {}
+}
+
 /**
  * Builds multipart bodies for Spring `@RequestPart("data")` DTOs: the DTO must be a JSON blob,
  * otherwise Spring rejects it with 415 Unsupported Media Type.

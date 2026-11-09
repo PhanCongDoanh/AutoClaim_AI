@@ -5,15 +5,16 @@ import { AuthContext, type AuthContextValue, type User } from './auth'
 
 export type { Role, User } from './auth'
 
-const STORAGE_KEY = 'autoclaim.user'
+/** v2 stores `fullName` / `roleName` (matching `StaffResponse`) instead of `name` / `role`. */
+const STORAGE_KEY = 'autoclaim.user.v2'
 
 function isUser(value: unknown): value is User {
   if (typeof value !== 'object' || value === null) return false
   const candidate = value as Record<string, unknown>
   return (
     typeof candidate.email === 'string' &&
-    typeof candidate.name === 'string' &&
-    (ROLE_NAME_VALUES as readonly unknown[]).includes(candidate.role)
+    typeof candidate.fullName === 'string' &&
+    (ROLE_NAME_VALUES as readonly unknown[]).includes(candidate.roleName)
   )
 }
 

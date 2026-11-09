@@ -23,8 +23,8 @@ export default function ProtectedRoute({ allowedRoles, children }: ProtectedRout
     return <Navigate to="/login" replace state={state} />
   }
 
-  if (!allowedRoles.includes(user.role)) {
-    return <Navigate to={ROLE_HOME_PATH[user.role]} replace />
+  if (!allowedRoles.includes(user.roleName)) {
+    return <Navigate to={ROLE_HOME_PATH[user.roleName]} replace />
   }
 
   return children ?? <Outlet />

@@ -4,7 +4,7 @@ import type { RoleName } from './enums'
 /** Mirrors `StaffResponseDto`. */
 export interface StaffResponse {
   userId: UUID
-  name: string
+  fullName: string
   email: string
   phone: string | null
   roleName: RoleName | null
@@ -14,15 +14,17 @@ export interface StaffResponse {
 
 /** Mirrors `CreateStaffRequest`. `roleName` defaults to STAFF on the backend. */
 export interface CreateStaffRequest {
-  name: string
+  fullName: string
   email: string
   phone?: string
+  /** 6-72 characters; stored BCrypt-hashed. */
+  password: string
   roleName?: RoleName
 }
 
-/** Mirrors `UpdateStaffRequest`. */
+/** Mirrors `UpdateStaffRequest`. Email and password can't be changed through this endpoint. */
 export interface UpdateStaffRequest {
-  name: string
+  fullName: string
   phone?: string
   roleName?: RoleName
 }

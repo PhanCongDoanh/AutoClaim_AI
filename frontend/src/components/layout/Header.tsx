@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ROLE_HOME_PATH, type Role } from '@/contexts/auth'
 import { useAuth } from '@/hooks/useAuth'
+import { getInitials, ROLE_LABELS } from '@/lib/people'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -33,28 +34,16 @@ const NAV_ITEMS_BY_ROLE: Record<Role, NavItem[]> = {
   ],
 }
 
-const ROLE_LABELS: Record<Role, string> = {
-  ADMIN: 'Quản trị viên',
-  STAFF: 'Nhân viên',
-}
-
 const AVATAR_COLORS: Record<Role, string> = {
   ADMIN: 'bg-violet-600',
   STAFF: 'bg-brand-600',
-}
-
-/** First letters of the family and given names, e.g. "Trần Quốc Bảo" → "TB". */
-function getInitials(name: string): string {
-  const parts = name.split(' ').filter(Boolean)
-  const picked = parts.length > 1 ? [parts[0], parts[parts.length - 1]] : parts
-  return picked.map((part) => part[0]?.toUpperCase()).join('')
 }
 
 export default function Header() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
-  const navItems = user ? NAV_ITEMS_BY_ROLE[user.role] : []
+  const navItems = user ? NAV_ITEMS_BY_ROLE[user.roleName] : []
 
   function handleLogout() {
     logout()
@@ -65,7 +54,7 @@ export default function Header() {
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
       <div className="flex h-16 items-center justify-between gap-4 px-4 lg:px-6">
         <div className="flex h-full items-center gap-8">
-          <Link to={user ? ROLE_HOME_PATH[user.role] : '/login'} className="flex items-center gap-2.5">
+          <Link to={user ? ROLE_HOME_PATH[user.roleName] : '/login'} className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
               <ShieldCheck className="h-5 w-5" />
             </span>
@@ -113,21 +102,21 @@ export default function Header() {
                 <span
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white',
-                    AVATAR_COLORS[user.role],
+                    AVATAR_COLORS[user.roleName],
                   )}
                   aria-hidden="true"
                 >
-                  {getInitials(user.name)}
+                  {getInitials(user.fullName)}
                 </span>
                 <span className="hidden text-left leading-tight sm:block">
-                  <span className="block whitespace-nowrap text-sm font-medium text-slate-900">{user.name}</span>
-                  <span className="block text-xs text-slate-500">{ROLE_LABELS[user.role]}</span>
+                  <span className="block whitespace-nowrap text-sm font-medium text-slate-900">{user.fullName}</span>
+                  <span className="block text-xs text-slate-500">{ROLE_LABELS[user.roleName]}</span>
                 </span>
                 <ChevronDown className="hidden h-4 w-4 text-slate-400 sm:block" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>
-                  <span className="block font-medium">{user.name}</span>
+                  <span className="block font-medium">{user.fullName}</span>
                   <span className="block text-xs text-muted-foreground">{user.email}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />

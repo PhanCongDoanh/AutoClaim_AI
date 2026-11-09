@@ -3,11 +3,11 @@ import type { RoleName } from '@/types'
 
 export type Role = RoleName
 
+/** Same field names as `StaffResponse`, so a staff record can stand in for the session user. */
 export interface User {
   email: string
-  role: Role
-  /** Display name for the header. */
-  name: string
+  fullName: string
+  roleName: Role
 }
 
 export interface AuthContextValue {
