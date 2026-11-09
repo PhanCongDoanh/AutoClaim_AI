@@ -7,7 +7,7 @@ import type {
   VehicleFormData,
   VehicleResponse,
 } from '../types'
-import { apiClient } from './apiClient'
+import { axiosInstance } from '@/utils/axiosInstance'
 
 /** Axios swaps this for `multipart/form-data; boundary=...` when the body is `FormData`. */
 const MULTIPART_CONFIG = { headers: { 'Content-Type': 'multipart/form-data' } }
@@ -24,12 +24,12 @@ function toVehicleFormData({ model, licensePlate, seats, avatar }: VehicleFormDa
 
 export const adminService = {
   async getVehicles(): Promise<VehicleResponse[]> {
-    const { data } = await apiClient.get<VehicleResponse[]>('/admin/vehicles')
+    const { data } = await axiosInstance.get<VehicleResponse[]>('/admin/vehicles')
     return data
   },
 
   async createVehicle(vehicle: VehicleFormData): Promise<VehicleResponse> {
-    const { data } = await apiClient.post<VehicleResponse>(
+    const { data } = await axiosInstance.post<VehicleResponse>(
       '/admin/vehicles',
       toVehicleFormData(vehicle),
       MULTIPART_CONFIG,
@@ -39,7 +39,7 @@ export const adminService = {
 
   /** Omitting `avatar` keeps the current photo; the API has no way to remove one. */
   async updateVehicle(vehicleId: UUID, vehicle: VehicleFormData): Promise<VehicleResponse> {
-    const { data } = await apiClient.put<VehicleResponse>(
+    const { data } = await axiosInstance.put<VehicleResponse>(
       `/admin/vehicles/${vehicleId}`,
       toVehicleFormData(vehicle),
       MULTIPART_CONFIG,
@@ -48,27 +48,27 @@ export const adminService = {
   },
 
   async deleteVehicle(vehicleId: UUID): Promise<MessageResponse> {
-    const { data } = await apiClient.delete<MessageResponse>(`/admin/vehicles/${vehicleId}`)
+    const { data } = await axiosInstance.delete<MessageResponse>(`/admin/vehicles/${vehicleId}`)
     return data
   },
 
   async getStaff(): Promise<StaffResponse[]> {
-    const { data } = await apiClient.get<StaffResponse[]>('/admin/staff')
+    const { data } = await axiosInstance.get<StaffResponse[]>('/admin/staff')
     return data
   },
 
   async createStaff(request: CreateStaffRequest): Promise<StaffResponse> {
-    const { data } = await apiClient.post<StaffResponse>('/admin/staff', request)
+    const { data } = await axiosInstance.post<StaffResponse>('/admin/staff', request)
     return data
   },
 
   async updateStaff(staffId: UUID, request: UpdateStaffRequest): Promise<StaffResponse> {
-    const { data } = await apiClient.put<StaffResponse>(`/admin/staff/${staffId}`, request)
+    const { data } = await axiosInstance.put<StaffResponse>(`/admin/staff/${staffId}`, request)
     return data
   },
 
   async deleteStaff(staffId: UUID): Promise<MessageResponse> {
-    const { data } = await apiClient.delete<MessageResponse>(`/admin/staff/${staffId}`)
+    const { data } = await axiosInstance.delete<MessageResponse>(`/admin/staff/${staffId}`)
     return data
   },
 }

@@ -1,12 +1,10 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { authService } from '@/services/authService'
 import { ROLE_NAME_VALUES } from '@/types'
+import { USER_STORAGE_KEY } from '@/utils/axiosInstance'
 import { AuthContext, type AuthContextValue, type User } from './auth'
 
 export type { Role, User } from './auth'
-
-/** v2 stores `fullName` / `roleName` (matching `StaffResponse`) instead of `name` / `role`. */
-const STORAGE_KEY = 'autoclaim.user.v2'
 
 function isUser(value: unknown): value is User {
   if (typeof value !== 'object' || value === null) return false
@@ -14,6 +12,8 @@ function isUser(value: unknown): value is User {
   return (
     typeof candidate.email === 'string' &&
     typeof candidate.fullName === 'string' &&
+    typeof candidate.token === 'string' &&
+    candidate.token.length > 0 &&
     (ROLE_NAME_VALUES as readonly unknown[]).includes(candidate.roleName)
   )
 }
@@ -22,18 +22,18 @@ function isUser(value: unknown): value is User {
 function readStoredUser(): User | null {
   for (const storage of [localStorage, sessionStorage]) {
     try {
-      const parsed: unknown = JSON.parse(storage.getItem(STORAGE_KEY) ?? 'null')
+      const parsed: unknown = JSON.parse(storage.getItem(USER_STORAGE_KEY) ?? 'null')
       if (isUser(parsed)) return parsed
     } catch {
-      storage.removeItem(STORAGE_KEY)
+      storage.removeItem(USER_STORAGE_KEY)
     }
   }
   return null
 }
 
 function clearStoredUser() {
-  localStorage.removeItem(STORAGE_KEY)
-  sessionStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(USER_STORAGE_KEY)
+  sessionStorage.removeItem(USER_STORAGE_KEY)
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string, remember: boolean) => {
     const loggedIn = await authService.login(email, password)
     clearStoredUser()
-    ;(remember ? localStorage : sessionStorage).setItem(STORAGE_KEY, JSON.stringify(loggedIn))
+    ;(remember ? localStorage : sessionStorage).setItem(USER_STORAGE_KEY, JSON.stringify(loggedIn))
     setUser(loggedIn)
     return loggedIn
   }, [])

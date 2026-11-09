@@ -3,11 +3,12 @@ import type { RoleName } from '@/types'
 
 export type Role = RoleName
 
-/** Same field names as `StaffResponse`, so a staff record can stand in for the session user. */
+/** Same field names as `StaffResponse`, plus the JWT returned by `POST /api/auth/login`. */
 export interface User {
   email: string
   fullName: string
   roleName: Role
+  token: string
 }
 
 export interface AuthContextValue {
