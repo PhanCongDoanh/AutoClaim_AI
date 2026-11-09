@@ -1,33 +1,19 @@
-import {
-  AlertCircle,
-  Car,
-  CircleCheck,
-  KeyRound,
-  RotateCw,
-  Search,
-  Wrench,
-  X,
-  type LucideIcon,
-} from 'lucide-react'
+import { AlertCircle, CircleCheck, RotateCw, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VehicleCard } from '@/components/vehicle/VehicleCard'
+import { VehicleGridSkeleton } from '@/components/vehicle/VehicleGridSkeleton'
+import { VehicleStatusTabs } from '@/components/vehicle/VehicleStatusTabs'
 import { useVehicles } from '@/hooks/useVehicles'
-import { VEHICLE_STATUS_VALUES, type VehicleStatus } from '@/types'
+import type { VehicleStatus } from '@/types'
 import type { DashboardLocationState } from './dashboardState'
 
-const STATUS_TABS: Record<VehicleStatus, { label: string; icon: LucideIcon; empty: string }> = {
-  AVAILABLE: { label: 'Available', icon: Car, empty: 'No vehicles are available right now.' },
-  RENTED: { label: 'Rented', icon: KeyRound, empty: 'No vehicles are currently rented.' },
-  MAINTENANCE: { label: 'Maintenance', icon: Wrench, empty: 'No vehicles are in maintenance.' },
-}
-
-function isVehicleStatus(value: string): value is VehicleStatus {
-  return (VEHICLE_STATUS_VALUES as readonly string[]).includes(value)
+const EMPTY_MESSAGES: Record<VehicleStatus, string> = {
+  AVAILABLE: 'Hiện không có xe nào sẵn sàng.',
+  RENTED: 'Hiện không có xe nào đang cho thuê.',
+  MAINTENANCE: 'Không có xe nào đang bảo trì.',
 }
 
 export default function Dashboard() {
@@ -39,9 +25,22 @@ export default function Dashboard() {
 
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Staff Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Fleet overview and today&apos;s inspections.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Danh sách xe</h1>
+          <p className="text-sm text-muted-foreground">Chọn xe khách muốn thuê để bắt đầu Check-in.</p>
+        </div>
+        <div className="relative sm:w-72">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Tìm tên xe, biển số..."
+            className="pl-9"
+            aria-label="Tìm xe"
+          />
+        </div>
       </div>
 
       {showNotice && checkedIn && (
@@ -66,39 +65,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      <Tabs value={status} onValueChange={(value) => isVehicleStatus(value) && setStatus(value)}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <TabsList>
-            {VEHICLE_STATUS_VALUES.map((value) => {
-              const { label, icon: Icon } = STATUS_TABS[value]
-              return (
-                <TabsTrigger key={value} value={value}>
-                  <Icon />
-                  {label}
-                </TabsTrigger>
-              )
-            })}
-          </TabsList>
-
-          <div className="relative sm:w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search model or license plate"
-              className="pl-9"
-              aria-label="Search vehicles"
-            />
-          </div>
-        </div>
-
-        {VEHICLE_STATUS_VALUES.map((value) => (
-          <TabsContent key={value} value={value}>
-            <VehicleGrid status={value} search={search} emptyMessage={STATUS_TABS[value].empty} />
-          </TabsContent>
-        ))}
-      </Tabs>
+      <VehicleStatusTabs value={status} onValueChange={setStatus}>
+        {(tabStatus) => (
+          <VehicleGrid status={tabStatus} search={search} emptyMessage={EMPTY_MESSAGES[tabStatus]} />
+        )}
+      </VehicleStatusTabs>
     </section>
   )
 }
@@ -113,45 +84,32 @@ interface VehicleGridProps {
 function VehicleGrid({ status, search, emptyMessage }: VehicleGridProps) {
   const { vehicles, isLoading, error, refetch } = useVehicles(status, search)
 
-  if (isLoading) {
-    return (
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Card key={index} className="overflow-hidden">
-            <div className="aspect-video animate-pulse bg-muted" />
-            <div className="space-y-2 p-5">
-              <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-              <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
-            </div>
-          </Card>
-        ))}
-      </div>
-    )
-  }
+  if (isLoading) return <VehicleGridSkeleton />
+
 
   if (error) {
     return (
-      <Card className="flex flex-col items-center gap-3 p-10 text-center">
+      <div className="flex flex-col items-center gap-3 py-12 text-center">
         <AlertCircle className="h-6 w-6 text-destructive" />
         <p className="text-sm text-muted-foreground">{error}</p>
         <Button variant="secondary" size="sm" onClick={refetch}>
           <RotateCw />
-          Try again
+          Thử lại
         </Button>
-      </Card>
+      </div>
     )
   }
 
   if (vehicles.length === 0) {
     return (
-      <Card className="p-10 text-center text-sm text-muted-foreground">
-        {search.trim() ? `No vehicles match “${search.trim()}”.` : emptyMessage}
-      </Card>
+      <p className="py-12 text-center text-sm text-muted-foreground">
+        {search.trim() ? `Không có xe nào khớp “${search.trim()}”.` : emptyMessage}
+      </p>
     )
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {vehicles.map((vehicle) => (
         <VehicleCard key={vehicle.vehicleId} vehicle={vehicle} />
       ))}
