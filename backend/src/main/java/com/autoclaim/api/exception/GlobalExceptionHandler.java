@@ -32,6 +32,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
     }
 
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null);
+    }
+
     @ExceptionHandler(FileProcessingException.class)
     public ResponseEntity<ErrorResponse> handleFileProcessing(FileProcessingException ex, HttpServletRequest request) {
         log.error("File processing failed on {} {}", request.getMethod(), request.getRequestURI(), ex);
