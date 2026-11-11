@@ -1,4 +1,5 @@
+.venv/
 .env
-weights/*.pt
 out/
 __pycache__/
+# weights/*.pt KHÔNG bị ignore: commit luôn để cả nhóm có model (mỗi file < 100MB)
