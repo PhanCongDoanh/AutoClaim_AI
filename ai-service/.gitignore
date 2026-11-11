@@ -1,0 +1,4 @@
+.env
+weights/*.pt
+out/
+__pycache__/
