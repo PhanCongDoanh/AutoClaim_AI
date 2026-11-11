@@ -32,7 +32,31 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/autoclaim_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: 180704@db
-      APP_AI_DETECT_URL: http://host.docker.internal:5000/api/ai/detect
+      # Gọi AI qua tên service "ai" trong mạng nội bộ Docker
+      APP_AI_DETECT_URL: http://ai:5000/api/ai/detect
+
+  ai:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: autoclaim-ai
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5000:5000"   # chỉ để mở http://localhost:5000/docs test; macOS bị AirPlay chiếm 5000 thì đổi thành "5001:5000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: autoclaim_db
+      DB_USER: postgres
+      DB_PASSWORD: 180704@db
+      DEVICE: cpu
+      DAMAGE_MODEL: weights/damage_best.pt
+      PART_MODEL: weights/parts_best.pt
+    volumes:
+      - ./ai-service/weights:/app/weights   # thay file .pt mới -> chỉ cần restart, không cần build lại
 
 volumes:
   postgres_data:
