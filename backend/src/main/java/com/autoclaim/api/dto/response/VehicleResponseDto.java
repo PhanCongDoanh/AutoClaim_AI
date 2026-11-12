@@ -7,7 +7,11 @@ import lombok.Builder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Builder
+/**
+ * Vehicle card data. The rental fields ({@code activeBookingId} … {@code checkInAt}) are only filled for
+ * RENTED vehicles that have an ACTIVE booking; they are null otherwise.
+ */
+@Builder(toBuilder = true)
 public record VehicleResponseDto(
         UUID vehicleId,
         String licensePlate,
@@ -19,20 +23,16 @@ public record VehicleResponseDto(
         String renterName,
         String renterPhone,
         UUID checkInSessionId,
+        /** When the vehicle was handed over (created_at of the CHECK_IN session). */
+        LocalDateTime checkInAt,
+        /** Agreed return time ({@code bookings.expected_return_at}); may be null for old bookings. */
+        LocalDateTime expectedReturnAt,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
 
+    /** Vehicle fields only; use {@link #toBuilder()} to add rental details. */
     public static VehicleResponseDto fromEntity(Vehicle vehicle) {
-        return fromEntity(vehicle, null, null, null, null);
-    }
-
-    public static VehicleResponseDto fromEntity(
-            Vehicle vehicle,
-            UUID activeBookingId,
-            String renterName,
-            String renterPhone,
-            UUID checkInSessionId) {
         return VehicleResponseDto.builder()
                 .vehicleId(vehicle.getVehicleId())
                 .licensePlate(vehicle.getLicensePlate())
@@ -40,10 +40,6 @@ public record VehicleResponseDto(
                 .seats(vehicle.getSeats())
                 .status(vehicle.getStatus())
                 .avatarUrl(vehicle.getAvatarUrl())
-                .activeBookingId(activeBookingId)
-                .renterName(renterName)
-                .renterPhone(renterPhone)
-                .checkInSessionId(checkInSessionId)
                 .createdAt(vehicle.getCreatedAt())
                 .updatedAt(vehicle.getUpdatedAt())
                 .build();

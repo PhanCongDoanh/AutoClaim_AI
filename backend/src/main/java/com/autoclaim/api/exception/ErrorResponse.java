@@ -9,6 +9,8 @@ public record ErrorResponse(
         String error,
         String message,
         String path,
-        Map<String, String> fieldErrors
+        Map<String, String> fieldErrors,
+        /** Extra machine-readable data, e.g. {@code {"sessionId": "..."}} on a 409 duplicate check-out. */
+        Map<String, Object> details
 ) {
 }

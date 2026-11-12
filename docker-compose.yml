@@ -34,6 +34,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: 180704@db
       # Gọi AI qua tên service "ai" trong mạng nội bộ Docker
       APP_AI_DETECT_URL: http://ai:5000/api/ai/detect
+      APP_AI_STATUS_URL: http://ai:5000/api/ai/status
+      # Giờ Việt Nam cho các mốc thời gian JVM tự sinh (created_at), khớp với expectedReturnAt do frontend gửi
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
 
   ai:
     build:

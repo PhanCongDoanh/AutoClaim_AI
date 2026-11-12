@@ -64,7 +64,8 @@ def health():
 
 @app.post("/api/ai/detect", status_code=202)
 def detect(req: DetectRequest, bg: BackgroundTasks):
-    STATUS[req.sessionId] = {"status": "QUEUED", "progress": 0}
+    STATUS[req.sessionId] = {"status": "QUEUED", "progress": 0,
+                             "currentAngle": None, "completedAngles": [], "totalAngles": None}
     bg.add_task(process_session, req.sessionId)
     return {"sessionId": req.sessionId, "status": "QUEUED"}
 
@@ -106,7 +107,8 @@ def _wait_for_session(conn, session_id: str):
 def process_session(session_id: str):
     t0 = time.time()
     st = STATUS.setdefault(session_id, {})
-    st.update(status="PROCESSING", progress=0, step="Đang chờ dữ liệu")
+    st.update(status="PROCESSING", progress=0, step="Đang chờ dữ liệu",
+              currentAngle=None, completedAngles=[], totalAngles=None)
     try:
         with db.connect() as conn:
             s = _wait_for_session(conn, session_id)
@@ -121,6 +123,7 @@ def process_session(session_id: str):
             before_imgs = db.get_images(conn, checkin_id)
 
             angles = sorted(after_imgs)
+            st.update(totalAngles=len(angles))
             # Tải ảnh song song (I/O) cho nhanh
             urls = [u for a in angles for u in (before_imgs.get(a, {}).get("image_url"), after_imgs[a]["image_url"])]
             with ThreadPoolExecutor(8) as ex:
@@ -128,12 +131,16 @@ def process_session(session_id: str):
 
             results = []
             for i, angle in enumerate(angles):
-                st.update(progress=round(100 * i / len(angles)), step=f"Đang xử lý góc {i + 1}/{len(angles)} ({angle})")
+                st.update(progress=round(100 * i / len(angles)), step=f"Đang xử lý góc {i + 1}/{len(angles)} ({angle})",
+                          currentAngle=angle)
                 before, after = imgs[2 * i], imgs[2 * i + 1]
                 if before is None:
                     log.warning("Thiếu ảnh check-in cho %s, bỏ qua", angle)
+                    st["completedAngles"] = [*st["completedAngles"], angle]
                     continue
                 results.append((angle, analyzer.analyze_pair(before, after, angle)))
+                st["completedAngles"] = [*st["completedAngles"], angle]
+            st.update(currentAngle=None)
 
             image_ids = [v["image_id"] for v in after_imgs.values()]
             overridden = db.get_overridden_boxes(conn, image_ids)
@@ -158,7 +165,7 @@ def process_session(session_id: str):
         log.info("Session %s xong: %d hư hại mới trong %.1fs", session_id, n_new, time.time() - t0)
     except Exception as e:  # noqa: BLE001
         log.exception("AI xử lý lỗi cho session %s", session_id)
-        st.update(status="FAILED", error=str(e))
+        st.update(status="FAILED", error=str(e), currentAngle=None)
         try:
             with db.connect() as conn:
                 db.set_ai_status(conn, session_id, "FAILED")

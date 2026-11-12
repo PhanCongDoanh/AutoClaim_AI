@@ -3,6 +3,7 @@ package com.autoclaim.api.controller;
 import com.autoclaim.api.dto.request.CheckInRequest;
 import com.autoclaim.api.dto.request.CheckOutRequest;
 import com.autoclaim.api.dto.request.OverrideDamageRequest;
+import com.autoclaim.api.dto.response.AiProgressDto;
 import com.autoclaim.api.dto.response.InspectionResponseDto;
 import com.autoclaim.api.dto.response.SessionResultResponseDto;
 import com.autoclaim.api.service.InspectionService;
@@ -111,6 +112,28 @@ public class InspectionController {
     }
 
     @Operation(
+            summary = "Get AI Detection Progress",
+            description = "Progress of the AI damage detection for a CHECK_OUT session: status (PENDING | PROCESSING | DONE | FAILED), "
+                    + "progress 0-100, currentAngle and completedAngles. Uses the AI service's live state, or the stored ai_status "
+                    + "when the AI service has restarted or is unreachable (live = false)."
+    )
+    @GetMapping("/{sessionId}/ai-progress")
+    public ResponseEntity<AiProgressDto> getAiProgress(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(inspectionService.getAiProgress(sessionId));
+    }
+
+    @Operation(
+            summary = "Retry AI Detection",
+            description = "Re-runs AI detection for a CHECK_OUT session of an ACTIVE booking. Allowed when ai_status is FAILED (or null), "
+                    + "PENDING for over 2 minutes while the AI is not working on it, or PROCESSING for over 2 minutes when the AI "
+                    + "service no longer knows the session (404). Otherwise 409. Staff overrides are kept by the AI service."
+    )
+    @PostMapping("/{sessionId}/ai-retry")
+    public ResponseEntity<AiProgressDto> retryAi(@PathVariable UUID sessionId) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(inspectionService.retryAi(sessionId));
+    }
+
+    @Operation(
             summary = "Get Inspection Image",
             description = "Redirects (302) to the image's public URL in object storage, so <img src=\"/api/inspections/images/{id}\"> keeps working. Prefer using imageUrl from the results endpoint directly."
     )
@@ -123,7 +146,7 @@ public class InspectionController {
 
     @Operation(
             summary = "Override AI Damage Detection",
-            description = "Marks an AI damage detection as overridden (isOverridden = true) and optionally records overrideReason when field staff rejects a false positive."
+            description = "Marks an AI damage detection as overridden (isOverridden = true) and records the required overrideReason when field staff rejects a false positive. 400 when the reason is blank, 409 when the check-out is already completed."
     )
     @PatchMapping("/damages/{detectionId}/override")
     public ResponseEntity<Map<String, Object>> overrideDamage(
@@ -134,7 +157,7 @@ public class InspectionController {
 
     @Operation(
             summary = "Complete Check-Out Inspection",
-            description = "Finalizes a CHECK_OUT inspection session: sets Booking status to COMPLETED and updates Vehicle status to MAINTENANCE (if valid damages exist) or AVAILABLE (if none)."
+            description = "Finalizes a CHECK_OUT inspection session: sets Booking status to COMPLETED and updates Vehicle status to MAINTENANCE (if valid damages exist) or AVAILABLE (if none). 409 when the AI is not DONE or the session was already completed."
     )
     @PostMapping("/{sessionId}/complete")
     public ResponseEntity<InspectionResponseDto> completeInspection(@PathVariable UUID sessionId) {

@@ -19,7 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -65,29 +67,44 @@ public class VehicleService {
         return toVehicleResponseDto(vehicleRepository.saveAndFlush(vehicle));
     }
 
+    /** Number of non-deleted vehicles per status; every status is present (0 when none). */
+    public Map<VehicleStatus, Long> countByStatus() {
+        Map<VehicleStatus, Long> counts = new EnumMap<>(VehicleStatus.class);
+        for (VehicleStatus status : VehicleStatus.values()) {
+            counts.put(status, 0L);
+        }
+        for (Object[] row : vehicleRepository.countByStatus()) {
+            if (row[0] instanceof VehicleStatus status && row[1] instanceof Number count) {
+                counts.put(status, count.longValue());
+            }
+        }
+        return counts;
+    }
+
     public VehicleResponseDto toVehicleResponseDto(Vehicle vehicle) {
+        VehicleResponseDto base = VehicleResponseDto.fromEntity(vehicle);
         if (vehicle.getStatus() != VehicleStatus.RENTED) {
-            return VehicleResponseDto.fromEntity(vehicle);
+            return base;
         }
 
         return bookingRepository.findFirstByVehicle_VehicleIdAndStatusOrderByCreatedAtDesc(
                         vehicle.getVehicleId(), BookingStatus.ACTIVE)
                 .map(booking -> {
                     Renter renter = booking.getRenter();
-                    UUID checkInSessionId = inspectionSessionRepository
+                    InspectionSession checkInSession = inspectionSessionRepository
                             .findFirstByBooking_BookingIdAndSessionTypeOrderByCreatedAtDesc(
                                     booking.getBookingId(), SessionType.CHECK_IN)
-                            .map(InspectionSession::getSessionId)
                             .orElse(null);
 
-                    return VehicleResponseDto.fromEntity(
-                            vehicle,
-                            booking.getBookingId(),
-                            renter != null ? renter.getName() : null,
-                            renter != null ? renter.getPhoneNumber() : null,
-                            checkInSessionId
-                    );
+                    return base.toBuilder()
+                            .activeBookingId(booking.getBookingId())
+                            .renterName(renter != null ? renter.getName() : null)
+                            .renterPhone(renter != null ? renter.getPhoneNumber() : null)
+                            .checkInSessionId(checkInSession != null ? checkInSession.getSessionId() : null)
+                            .checkInAt(checkInSession != null ? checkInSession.getCreatedAt() : null)
+                            .expectedReturnAt(booking.getExpectedReturnAt())
+                            .build();
                 })
-                .orElseGet(() -> VehicleResponseDto.fromEntity(vehicle));
+                .orElse(base);
     }
 }
