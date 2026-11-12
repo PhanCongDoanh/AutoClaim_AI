@@ -17,10 +17,11 @@ interface FormFieldProps {
   /** Leading icon rendered inside the control; the control needs `pl-9`. */
   icon?: ReactNode
   className?: string
+  labelClassName?: string
   children: (props: FieldControlProps) => ReactNode
 }
 
-export function FormField({ label, required, error, hint, icon, className, children }: FormFieldProps) {
+export function FormField({ label, required, error, hint, icon, className, labelClassName, children }: FormFieldProps) {
   const id = useId()
   const messageId = `${id}-message`
   const message = error ?? hint
@@ -34,7 +35,7 @@ export function FormField({ label, required, error, hint, icon, className, child
 
   return (
     <div className={cn('space-y-2', className)}>
-      <Label htmlFor={id}>
+      <Label htmlFor={id} className={labelClassName}>
         {label}
         {required && <span className="ml-0.5 text-muted-foreground">*</span>}
       </Label>
