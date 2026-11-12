@@ -1,4 +1,5 @@
-import { CircleCheck, Lock } from 'lucide-react'
+import { CircleCheck } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { AngleDiagram } from '@/components/inspection/AngleDiagram'
 import { PhotoCaptureBox } from '@/components/inspection/PhotoCaptureBox'
 import { ANGLE_LABELS, VEHICLE_PHOTO_KEYS } from '@/components/inspection/photoAngles'
@@ -11,9 +12,27 @@ interface VehicleAnglesStepProps {
   onCapture: (key: AngleCode, file: File) => void
   readyCount: number
   disabled: boolean
+  /** Heading next to the progress bar, e.g. "Ảnh ngoại thất" / "Ảnh trả xe". */
+  title: string
+  /** Shown below the photo grid (e.g. what happens on submit). */
+  note?: ReactNode
+  /** Shown below the angle diagram in the left column. */
+  aside?: ReactNode
+  /** Check-in photo per angle, shown as a small reference in the corner of each box. */
+  referenceUrls?: Partial<Record<AngleCode, string>>
 }
 
-export function VehicleAnglesStep({ getSlot, onCapture, readyCount, disabled }: VehicleAnglesStepProps) {
+/** Angle diagram + 8 capture boxes, shared by check-in and check-out. */
+export function VehicleAnglesStep({
+  getSlot,
+  onCapture,
+  readyCount,
+  disabled,
+  title,
+  note,
+  aside,
+  referenceUrls,
+}: VehicleAnglesStepProps) {
   const total = VEHICLE_PHOTO_KEYS.length
   const isComplete = readyCount === total
   const isCaptured = (key: AngleCode) => isSlotReady(getSlot(key))
@@ -21,20 +40,23 @@ export function VehicleAnglesStep({ getSlot, onCapture, readyCount, disabled }: 
 
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-      <Card className="h-fit lg:sticky lg:top-20">
-        <div className="border-b px-5 py-4">
-          <h2 className="text-sm font-semibold text-foreground">Sơ đồ góc chụp</h2>
-          <p className="text-xs text-muted-foreground">Đi vòng quanh xe theo chiều kim đồng hồ</p>
-        </div>
-        <div className="p-5">
-          <AngleDiagram isCaptured={isCaptured} currentKey={nextKey} />
-        </div>
-      </Card>
+      <div className="space-y-4 lg:sticky lg:top-20 lg:h-fit">
+        <Card>
+          <div className="border-b px-5 py-4">
+            <h2 className="text-sm font-semibold text-foreground">Sơ đồ góc chụp</h2>
+            <p className="text-xs text-muted-foreground">Đi vòng quanh xe theo chiều kim đồng hồ</p>
+          </div>
+          <div className="p-5">
+            <AngleDiagram isCaptured={isCaptured} currentKey={nextKey} />
+          </div>
+        </Card>
+        {aside}
+      </div>
 
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-1 items-center gap-3">
-            <h2 className="text-sm font-semibold text-foreground">Ảnh ngoại thất</h2>
+            <h2 className="text-sm font-semibold text-foreground">{title}</h2>
             <div
               className="h-1.5 w-32 overflow-hidden rounded-full bg-muted"
               role="progressbar"
@@ -70,17 +92,12 @@ export function VehicleAnglesStep({ getSlot, onCapture, readyCount, disabled }: 
               slot={getSlot(key)}
               onSelect={(file) => onCapture(key, file)}
               disabled={disabled}
+              referenceUrl={referenceUrls?.[key]}
             />
           ))}
         </div>
 
-        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-          <p>
-            Khi bấm <strong>Xác nhận cho thuê</strong>, 8 ảnh được lưu làm ảnh gốc của phiên thuê và
-            xe tự động chuyển sang <strong>Đang thuê</strong>.
-          </p>
-        </div>
+        {note}
       </div>
     </div>
   )

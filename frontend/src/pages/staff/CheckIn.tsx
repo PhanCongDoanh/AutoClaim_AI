@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Car, Check, CircleCheck, Loader2, Lock, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleCheck, Loader2, Lock, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { StickyActionBar } from '@/components/layout/StickyActionBar'
@@ -7,8 +7,10 @@ import {
   ID_CARD_PHOTO_KEYS,
   VEHICLE_PHOTO_KEYS,
 } from '@/components/inspection/photoAngles'
+import { SelectVehiclePrompt } from '@/components/inspection/SelectVehiclePrompt'
+import { VehicleAnglesStep } from '@/components/inspection/VehicleAnglesStep'
+import { VehicleSummaryCard } from '@/components/inspection/VehicleSummaryCard'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { usePhotoCapture } from '@/hooks/usePhotoCapture'
 import { useVehicles } from '@/hooks/useVehicles'
 import { cn } from '@/lib/utils'
@@ -23,9 +25,9 @@ import {
   type RenterFormErrors,
   type RenterFormValues,
 } from './check-in/renterForm'
-import { VehicleAnglesStep } from './check-in/VehicleAnglesStep'
-import { VehicleSummaryCard } from './check-in/VehicleSummaryCard'
 import type { DashboardLocationState } from './dashboardState'
+
+const CHECK_IN_STEPS = ['Thông tin khách & CCCD', 'Chụp 8 góc xe'] as const
 
 const STEP_DESCRIPTIONS = {
   1: 'Bước 1/2 — Nhập thông tin người thuê và chụp CCCD 2 mặt.',
@@ -100,10 +102,13 @@ export default function CheckIn() {
       </div>
 
       {!vehicleId || isVehicleLoading || !vehicle ? (
-        <VehicleNotReady state={!vehicleId ? 'missing' : isVehicleLoading ? 'loading' : 'unavailable'} />
+        <SelectVehiclePrompt
+          isLoading={Boolean(vehicleId) && isVehicleLoading}
+          reason={vehicleId ? 'Xe này không còn sẵn sàng cho thuê.' : 'Chưa chọn xe để check-in.'}
+        />
       ) : (
         <>
-          <VehicleSummaryCard vehicle={vehicle} step={step} />
+          <VehicleSummaryCard vehicle={vehicle} steps={CHECK_IN_STEPS} step={step} stepsLabel="Các bước check-in" />
 
           {step === 1 ? (
             <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
@@ -117,10 +122,20 @@ export default function CheckIn() {
             </div>
           ) : (
             <VehicleAnglesStep
+              title="Ảnh ngoại thất"
               getSlot={getSlot}
               onCapture={capture}
               readyCount={vehicleReady}
               disabled={isSubmitting}
+              note={
+                <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                  <p>
+                    Khi bấm <strong>Xác nhận cho thuê</strong>, 8 ảnh được lưu làm ảnh gốc của phiên thuê và
+                    xe tự động chuyển sang <strong>Đang thuê</strong>.
+                  </p>
+                </div>
+              }
             />
           )}
 
@@ -183,26 +198,5 @@ function ProgressTag({ done, total, label }: { done: number; total: number; labe
       <CircleCheck className="h-4 w-4" />
       {done}/{total} {label}
     </span>
-  )
-}
-
-function VehicleNotReady({ state }: { state: 'missing' | 'loading' | 'unavailable' }) {
-  return (
-    <Card className="flex items-center gap-4 p-5">
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-        {state === 'loading' ? <Loader2 className="h-6 w-6 animate-spin" /> : <Car className="h-6 w-6" />}
-      </span>
-      {state === 'loading' ? (
-        <p className="text-sm text-muted-foreground">Đang tải thông tin xe…</p>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {state === 'missing' ? 'Chưa chọn xe. ' : 'Xe này không còn sẵn sàng cho thuê. '}
-          <Link to="/staff" className="font-medium text-primary hover:underline">
-            Chọn một xe đang sẵn sàng
-          </Link>{' '}
-          từ danh sách.
-        </p>
-      )}
-    </Card>
   )
 }

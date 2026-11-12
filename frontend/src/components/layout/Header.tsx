@@ -1,4 +1,4 @@
-import { Bell, Car, ChevronDown, LogIn, LogOut, Menu, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react'
+import { Car, ChevronDown, LogOut, Menu, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import {
@@ -24,9 +24,8 @@ interface NavItem {
 
 const NAV_ITEMS_BY_ROLE: Record<Role, NavItem[]> = {
   STAFF: [
+    // Check-in / check-out are started from a vehicle card, so they are not menu entries.
     { to: '/staff', label: 'Danh sách xe', icon: Car, end: true },
-    { to: '/staff/check-in', label: 'Check-in', icon: LogIn },
-    { to: '/staff/check-out', label: 'Check-out', icon: LogOut },
   ],
   ADMIN: [
     { to: '/admin/vehicles', label: 'Quản lý xe', icon: Car },
@@ -87,15 +86,7 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
-            aria-label="Thông báo"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-red-500" />
-          </button>
-
+          {/* Notification bell hidden until notifications exist. */}
           {user && (
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full border border-slate-200 py-1 pl-1 pr-3 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

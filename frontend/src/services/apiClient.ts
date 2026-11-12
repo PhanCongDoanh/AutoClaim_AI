@@ -20,6 +20,17 @@ export function getFieldErrors(error: unknown): Record<string, string> {
 }
 
 /**
+ * `details.sessionId` of a 409 Conflict — sent by `POST /inspections/check-out` when the booking
+ * already has a check-out session. Null for any other error.
+ */
+export function getConflictSessionId(error: unknown): string | null {
+  if (!(error instanceof AxiosError) || error.response?.status !== 409) return null
+  const data = error.response.data as Partial<ErrorResponse> | undefined
+  const sessionId = data?.details?.sessionId
+  return typeof sessionId === 'string' ? sessionId : null
+}
+
+/**
  * Builds multipart bodies for Spring `@RequestPart("data")` DTOs: the DTO must be a JSON blob,
  * otherwise Spring rejects it with 415 Unsupported Media Type.
  */
