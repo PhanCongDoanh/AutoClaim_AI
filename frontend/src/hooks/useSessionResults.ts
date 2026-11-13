@@ -19,6 +19,8 @@ export interface SessionResultsState {
   isFetching: boolean
   error: string | null
   refetch: () => void
+  /** Updates the loaded results in place (e.g. after an override) without reloading. */
+  mutate: (updater: (data: SessionResultResponse) => SessionResultResponse) => void
 }
 
 /** Loads `GET /api/inspections/{sessionId}/results`; idle when `sessionId` is null. */
@@ -51,6 +53,9 @@ export function useSessionResults(sessionId: UUID | null): SessionResultsState {
   }, [sessionId, requestKey])
 
   const refetch = useCallback(() => setReloadCount((count) => count + 1), [])
+  const mutate = useCallback((updater: (data: SessionResultResponse) => SessionResultResponse) => {
+    setResult((prev) => (prev?.data ? { ...prev, data: updater(prev.data) } : prev))
+  }, [])
 
   const sameSession = Boolean(sessionId) && result?.sessionId === sessionId
   const isFetching = Boolean(sessionId) && result?.requestKey !== requestKey
@@ -60,5 +65,6 @@ export function useSessionResults(sessionId: UUID | null): SessionResultsState {
     isFetching,
     error: sameSession && !isFetching ? (result?.error ?? null) : null,
     refetch,
+    mutate,
   }
 }

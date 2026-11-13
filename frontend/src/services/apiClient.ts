@@ -19,6 +19,11 @@ export function getFieldErrors(error: unknown): Record<string, string> {
   return data?.fieldErrors ?? {}
 }
 
+/** True for a 409 Conflict (e.g. the booking was completed in another tab). */
+export function isConflictError(error: unknown): boolean {
+  return error instanceof AxiosError && error.response?.status === 409
+}
+
 /**
  * `details.sessionId` of a 409 Conflict — sent by `POST /inspections/check-out` when the booking
  * already has a check-out session. Null for any other error.

@@ -9,16 +9,36 @@ import { getActiveDamages } from '@/lib/damage'
 import type { UUID } from '@/types'
 import { AiProgressCard } from './AiProgressCard'
 import { CheckOutPageHeader } from './checkOutLayout'
-import { CHECK_OUT_STEPS } from './checkOutSteps'
-import { DamageResultPlaceholder } from './DamageResultPlaceholder'
+import { CHECK_OUT_REPORT_STEPS, CHECK_OUT_STEPS } from './checkOutSteps'
+import { DamageReviewResult } from './damage-review/DamageReviewResult'
 import { NoDamageResult } from './NoDamageResult'
+import { ReportResult } from './ReportResult'
+
+type Screen = 'progress' | 'noDamage' | 'review' | 'report'
+
+const HEADERS: Record<Screen, { title: string; description: string }> = {
+  progress: { title: 'Check-out · Nhận lại xe', description: 'AI đang so sánh ảnh trả xe với ảnh gốc lúc check-in.' },
+  noDamage: {
+    title: 'Check-out · Kết quả kiểm tra',
+    description: 'Kết quả so sánh ngoại thất giữa lúc nhận và lúc trả xe.',
+  },
+  review: {
+    title: 'Check-out · Kết quả kiểm tra',
+    description: 'Kiểm tra lại từng hư hại AI phát hiện. Xoá những lỗi AI nhận nhầm trước khi xuất biên bản.',
+  },
+  report: {
+    title: 'Biên bản hư hại đã được tạo',
+    description: 'Tải PDF để lưu hoặc in cho khách ký. Xe đã tự động chuyển sang tab Bảo trì.',
+  },
+}
 
 /**
- * `/staff/check-out?sessionId=…`: shows AI progress (mockup 08) until the AI is DONE, then the result
- * (mockup 09, or the damage placeholder). Everything is rebuilt from the API, so F5 keeps the state.
+ * `/staff/check-out?sessionId=…`: AI progress (mockup 08) until the AI is DONE, then the result: 09 (no damage),
+ * 11 (review damages) or 13 (report, once the booking is closed). Everything is rebuilt from the API, so F5 keeps
+ * the current screen.
  */
 export function CheckOutSessionView({ sessionId }: { sessionId: UUID }) {
-  const { data: session, isLoading, error, refetch } = useSessionResults(sessionId)
+  const { data: session, isLoading, error, refetch, mutate } = useSessionResults(sessionId)
 
   if (isLoading || (!session && !error)) {
     return (
@@ -64,33 +84,27 @@ export function CheckOutSessionView({ sessionId }: { sessionId: UUID }) {
 
   const isAiDone = session.aiStatus === 'DONE'
   const hasDamage = getActiveDamages(session.images).length > 0
+  const isCompleted = session.bookingStatus === 'COMPLETED'
+  // DONE + damage: review (11) until the booking is closed, then the report (13). No damage left → 09.
+  const screen = !isAiDone ? 'progress' : !hasDamage ? 'noDamage' : isCompleted ? 'report' : 'review'
+  const header = HEADERS[screen]
 
   return (
     <section className="mx-auto max-w-6xl space-y-6 pb-28">
-      <CheckOutPageHeader
-        title={isAiDone ? 'Check-out · Kết quả kiểm tra' : 'Check-out · Nhận lại xe'}
-        description={
-          isAiDone
-            ? 'Kết quả so sánh ngoại thất giữa lúc nhận và lúc trả xe.'
-            : 'AI đang so sánh ảnh trả xe với ảnh gốc lúc check-in.'
-        }
-      />
+      <CheckOutPageHeader title={header.title} description={header.description} />
 
       <VehicleSummaryCard
         vehicle={session.vehicle}
         renterName={session.renterName}
-        steps={CHECK_OUT_STEPS}
-        step={isAiDone ? 3 : 2}
+        steps={screen === 'report' ? CHECK_OUT_REPORT_STEPS : CHECK_OUT_STEPS}
+        step={screen === 'progress' ? 2 : screen === 'report' ? 4 : 3}
         stepsLabel="Các bước check-out"
       />
 
-      {!isAiDone ? (
-        <AiProgressCard sessionId={session.sessionId} onDone={refetch} />
-      ) : hasDamage ? (
-        <DamageResultPlaceholder session={session} />
-      ) : (
-        <NoDamageResult session={session} onRefresh={refetch} />
-      )}
+      {screen === 'progress' && <AiProgressCard sessionId={session.sessionId} onDone={refetch} />}
+      {screen === 'noDamage' && <NoDamageResult session={session} onRefresh={refetch} />}
+      {screen === 'review' && <DamageReviewResult session={session} onSessionChange={mutate} onRefresh={refetch} />}
+      {screen === 'report' && <ReportResult session={session} />}
     </section>
   )
 }

@@ -2,6 +2,7 @@ package com.autoclaim.api.service;
 
 import com.autoclaim.api.entity.Booking;
 import com.autoclaim.api.entity.DamageDetection;
+import com.autoclaim.api.entity.InspectionImage;
 import com.autoclaim.api.entity.InspectionSession;
 import com.autoclaim.api.entity.Renter;
 import com.autoclaim.api.entity.Vehicle;
@@ -14,6 +15,7 @@ import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
+import com.lowagie.text.Image;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
@@ -37,13 +39,18 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * Builds the damage / handover report PDF of an inspection session (read-only, never changes state).
  * Text uses the embedded Be Vietnam Pro font (SIL OFL, {@code resources/fonts/}) so Vietnamese diacritics render.
- * Layout follows {@code docs/ui-mockups/13_Bien-ban-PDF.png} (text part; images are added in a later phase).
+ * Layout follows {@code docs/ui-mockups/13_Bien-ban-PDF.png}: info, damage table, then the check-out photo of
+ * every angle with a damage (red regions drawn by {@link ReportImageAnnotator}, two photos per row) and signatures.
+ * A photo that cannot be downloaded or read is skipped; the PDF is always produced.
  */
 @Slf4j
 @Service
@@ -62,9 +69,14 @@ public class ReportService {
     private static final Color RULE = new Color(226, 232, 240);
     private static final Color HEADER_BG = new Color(241, 245, 249);
     private static final String EMPTY = "—";
+    /** About half the A4 content width (499pt) per photo, two photos per row. */
+    private static final float PHOTO_MAX_WIDTH = 236f;
+    private static final float PHOTO_MAX_HEIGHT = 200f;
 
     private final InspectionSessionRepository inspectionSessionRepository;
     private final DamageDetectionRepository damageDetectionRepository;
+    private final S3StorageService storageService;
+    private final ReportImageAnnotator imageAnnotator;
 
     /** Loaded lazily once; BaseFont instances are thread-safe for reading. */
     private volatile Fonts fonts;
@@ -155,6 +167,7 @@ public class ReportService {
                 document.add(none);
             } else {
                 document.add(buildDamageTable(f, validDamages));
+                addDamagePhotos(document, f, validDamages);
             }
 
             // 5. Signatures
@@ -191,6 +204,100 @@ public class ReportService {
             table.addCell(dataCell(formatConfidence(d.getConfidenceScore()), f.body));
         }
         return table;
+    }
+
+    /**
+     * Check-out photo of each angle with a (non-overridden) damage, two per row, captioned with the angle and the
+     * damage numbers of the table above ("#1 Trầy xước 89%"). Photos that fail to download/read are skipped.
+     */
+    private void addDamagePhotos(Document document, Fonts f, List<DamageDetection> damages) throws DocumentException {
+        // Damages are already in report order (angle, then confidence) → number them like the table
+        Map<UUID, List<Integer>> indexesByImage = new LinkedHashMap<>();
+        for (int i = 0; i < damages.size(); i++) {
+            InspectionImage image = damages.get(i).getImage();
+            if (image != null) {
+                indexesByImage.computeIfAbsent(image.getImageId(), key -> new ArrayList<>()).add(i);
+            }
+        }
+
+        PdfPTable photos = new PdfPTable(2);
+        photos.setWidthPercentage(100);
+        photos.setSpacingAfter(24f);
+        int added = 0;
+        for (List<Integer> indexes : indexesByImage.values()) {
+            InspectionImage image = damages.get(indexes.getFirst()).getImage();
+            Image photo = loadPhoto(image, damages, indexes);
+            if (photo == null) {
+                continue;
+            }
+            photos.addCell(photoCell(f, image, photo, damages, indexes));
+            added++;
+        }
+        if (added == 0) {
+            return;
+        }
+        if (added % 2 == 1) {
+            PdfPCell filler = new PdfPCell(new Phrase(""));
+            filler.setBorder(Rectangle.NO_BORDER);
+            photos.addCell(filler);
+        }
+
+        Paragraph heading = new Paragraph("Ảnh các góc có hư hại", f.label);
+        heading.setSpacingAfter(8f);
+        heading.setKeepTogether(true);
+        document.add(heading);
+        document.add(photos);
+    }
+
+    /** Downloads the check-out photo and draws its damage regions; plain photo if drawing fails, null if unusable. */
+    private Image loadPhoto(InspectionImage image, List<DamageDetection> damages, List<Integer> indexes) {
+        byte[] original = storageService.download(image.getImageUrl()).orElse(null);
+        if (original == null) {
+            log.warn("Report: skipping photo {} ({}), download failed", image.getImageId(), image.getAngleCode());
+            return null;
+        }
+        List<ReportImageAnnotator.Mark> marks = indexes.stream()
+                .map(i -> new ReportImageAnnotator.Mark(i + 1, damages.get(i).getBoundingBox()))
+                .toList();
+        byte[] bytes = imageAnnotator.annotate(original, marks).orElse(original);
+        try {
+            Image photo = Image.getInstance(bytes);
+            photo.scaleToFit(PHOTO_MAX_WIDTH, PHOTO_MAX_HEIGHT);
+            photo.setAlignment(Element.ALIGN_CENTER);
+            return photo;
+        } catch (IOException | RuntimeException ex) {
+            log.warn("Report: skipping photo {} ({}), unreadable: {}", image.getImageId(), image.getAngleCode(),
+                    ex.toString());
+            return null;
+        }
+    }
+
+    private static PdfPCell photoCell(Fonts f, InspectionImage image, Image photo,
+                                      List<DamageDetection> damages, List<Integer> indexes) {
+        PdfPCell cell = new PdfPCell();
+        cell.setBorder(Rectangle.NO_BORDER);
+        cell.setPadding(4f);
+        cell.setPaddingBottom(12f);
+        cell.addElement(photo);
+
+        AngleCode angle = image.getAngleCode();
+        Integer number = InspectionLabels.angleNumber(angle);
+        Paragraph angleCaption = new Paragraph(
+                (number != null ? "Góc " + number + " · " : "") + InspectionLabels.angleLabel(angle), f.label);
+        angleCaption.setAlignment(Element.ALIGN_CENTER);
+        angleCaption.setSpacingBefore(4f);
+        cell.addElement(angleCaption);
+
+        List<String> labels = new ArrayList<>();
+        for (int i : indexes) {
+            DamageDetection d = damages.get(i);
+            labels.add("#" + (i + 1) + " " + InspectionLabels.damageLabel(d.getDamageType()) + " "
+                    + formatConfidence(d.getConfidenceScore()));
+        }
+        Paragraph damageCaption = new Paragraph(String.join("  ·  ", labels), f.small);
+        damageCaption.setAlignment(Element.ALIGN_CENTER);
+        cell.addElement(damageCaption);
+        return cell;
     }
 
     private PdfPTable buildSignatureTable(Fonts f, String staffName) {

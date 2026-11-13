@@ -26,6 +26,13 @@ export function formatShortDateTime(value: LocalDateTime | null | undefined): st
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} · ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+/** `28/10 09:05` (photo labels "CHECK-IN · 28/10 09:05"), or `—` when missing. */
+export function formatDayMonthTime(value: LocalDateTime | null | undefined): string {
+  const date = parseLocalDateTime(value)
+  if (!date) return '—'
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 /** `30-10-2026` (safe for file names), or today's date when missing. */
 export function formatFileDate(value: LocalDateTime | null | undefined): string {
   const date = parseLocalDateTime(value) ?? new Date()

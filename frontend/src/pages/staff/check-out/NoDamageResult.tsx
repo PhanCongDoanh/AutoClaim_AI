@@ -6,6 +6,7 @@ import { StickyActionBar } from '@/components/layout/StickyActionBar'
 import { ANGLE_LABELS } from '@/components/inspection/photoAngles'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { getOverriddenDamages } from '@/lib/damage'
 import { getErrorMessage } from '@/services/apiClient'
 import { inspectionService } from '@/services/inspectionService'
 import type { SessionResultResponse } from '@/types'
@@ -27,6 +28,7 @@ export function NoDamageResult({ session, onRefresh }: NoDamageResultProps) {
   const [isCompleting, setIsCompleting] = useState(false)
   const isCompleted = session.bookingStatus === 'COMPLETED'
   const vehicle = session.vehicle
+  const overriddenCount = getOverriddenDamages(session.images).length
 
   async function handleComplete() {
     setIsCompleting(true)
@@ -67,6 +69,11 @@ export function NoDamageResult({ session, onRefresh }: NoDamageResultProps) {
               </>
             )}
           </p>
+          {overriddenCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Đã loại {overriddenCount} lỗi do AI nhận nhầm (không ghi vào biên bản).
+            </p>
+          )}
         </div>
 
         <ul className="grid grid-cols-4 gap-3 border-t p-5 sm:grid-cols-8" aria-label="Ảnh trả xe theo 8 góc">

@@ -14,5 +14,7 @@ export interface DashboardLocationState {
     /** AVAILABLE (no damage) or MAINTENANCE (damage found). */
     vehicleStatus: VehicleStatus
     sessionId: UUID
+    /** Set when leaving the report screen (mockup 13): toast "Đã xuất biên bản PDF" with "Tải lại PDF" (mockup 14). */
+    reportFileName?: string
   }
 }

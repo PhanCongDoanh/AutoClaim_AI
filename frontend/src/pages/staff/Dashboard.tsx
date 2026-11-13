@@ -1,4 +1,4 @@
-import { AlertCircle, CircleCheck, RotateCw, Search, X } from 'lucide-react'
+import { AlertCircle, CircleCheck, FileDown, RotateCw, Search, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -9,7 +9,10 @@ import { VehicleGridSkeleton } from '@/components/vehicle/VehicleGridSkeleton'
 import { VehicleStatusTabs } from '@/components/vehicle/VehicleStatusTabs'
 import { useVehicleCounts } from '@/hooks/useVehicleCounts'
 import { useVehicles } from '@/hooks/useVehicles'
-import type { VehicleResponse, VehicleStatus } from '@/types'
+import { saveBlob } from '@/lib/download'
+import { getErrorMessage } from '@/services/apiClient'
+import { inspectionService } from '@/services/inspectionService'
+import type { UUID, VehicleResponse, VehicleStatus } from '@/types'
 import { RentedVehicleSheet } from './dashboard/RentedVehicleSheet'
 import type { DashboardLocationState } from './dashboardState'
 
@@ -30,6 +33,14 @@ const CHECKED_OUT_DESTINATION: Partial<Record<VehicleStatus, string>> = {
   MAINTENANCE: 'đã chuyển sang tab Bảo trì.',
 }
 
+async function redownloadReport(sessionId: UUID, fileName: string) {
+  try {
+    saveBlob(await inspectionService.downloadReport(sessionId), fileName)
+  } catch (err) {
+    toast.error('Không tải được biên bản PDF', { description: getErrorMessage(err) })
+  }
+}
+
 export default function Dashboard() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -47,12 +58,22 @@ export default function Dashboard() {
   // Mockup 10: toast once after a completed check-out, then drop the state so F5 / Back don't repeat it.
   useEffect(() => {
     if (!checkedOut) return
-    toast.success('Trả xe hoàn tất', {
-      id: `checked-out-${checkedOut.sessionId}`,
-      description: `${checkedOut.model} · ${checkedOut.licensePlate} ${
-        CHECKED_OUT_DESTINATION[checkedOut.vehicleStatus] ?? 'đã cập nhật trạng thái.'
-      }`,
-    })
+    const description = `${checkedOut.model} · ${checkedOut.licensePlate} ${
+      CHECKED_OUT_DESTINATION[checkedOut.vehicleStatus] ?? 'đã cập nhật trạng thái.'
+    }`
+    const { reportFileName, sessionId } = checkedOut
+    if (reportFileName) {
+      // Mockup 14: report produced, vehicle moved to maintenance.
+      toast('Đã xuất biên bản PDF', {
+        id: `checked-out-${sessionId}`,
+        icon: <FileDown className="h-4 w-4 text-red-600" />,
+        description,
+        duration: 10_000,
+        action: { label: 'Tải lại PDF', onClick: () => void redownloadReport(sessionId, reportFileName) },
+      })
+    } else {
+      toast.success('Trả xe hoàn tất', { id: `checked-out-${sessionId}`, description })
+    }
     navigate(location.pathname, { replace: true, state: null })
   }, [checkedOut, navigate, location.pathname])
 
