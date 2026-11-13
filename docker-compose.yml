@@ -36,7 +36,7 @@ services:
       APP_AI_DETECT_URL: http://ai:5000/api/ai/detect
       APP_AI_STATUS_URL: http://ai:5000/api/ai/status
       # Giờ Việt Nam cho các mốc thời gian JVM tự sinh (created_at), khớp với expectedReturnAt do frontend gửi
-      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh -Djava.awt.headless=true
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh -Djava.awt.headless=true -Xmx512m
 
   ai:
     build:

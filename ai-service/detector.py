@@ -162,6 +162,26 @@ ANGLE_SIDE = {
 }
 
 
+def visible_side(angle: str, cx: float) -> str:
+    """Phía của XE mà vết nằm trên đó, suy ra từ góc chụp (đáng tin hơn model bộ phận:
+    model train với lật ngang ảnh nên hay nhầm trái/phải).
+    Góc 2,3,4 chỉ thấy bên trái; 6,7,8 chỉ thấy bên phải.
+    Đầu xe (ANGLE_1): đứng trước xe nhìn vào -> bên TRÁI của xe nằm ở nửa PHẢI ảnh.
+    Đuôi xe (ANGLE_5): đứng sau xe nhìn vào -> bên TRÁI của xe nằm ở nửa TRÁI ảnh."""
+    side = ANGLE_SIDE.get(angle, "")
+    if side:
+        return side
+    if angle == "ANGLE_1":
+        return "trái" if cx > 0.5 else "phải"
+    if angle == "ANGLE_5":
+        return "trái" if cx < 0.5 else "phải"
+    return ""
+
+
+# Lớp bộ phận có phân biệt trái/phải (lớp không có trong danh sách và không chứa left/right thì giữ nguyên)
+SIDED_GENERIC = {"front_door", "back_door", "front_light", "back_light", "wheel"}
+
+
 def heuristic_part(angle: str, cx: float, cy: float) -> str:
     """Đoán bộ phận theo góc chụp + vị trí tâm vết (cx, cy chuẩn hoá 0..1). Dùng khi chưa có model bộ phận."""
     side = ANGLE_SIDE.get(angle, "")
@@ -226,12 +246,14 @@ class DamageAnalyzer:
                 if ov > best_ov and p.cls_name not in ("object",):
                     best, best_ov = p, ov
             if best is not None and best_ov > 0.2 * det.area:
-                name = PART_VI.get(best.cls_name, best.cls_name)
-                side = ANGLE_SIDE.get(angle, "")
-                # Lớp không có trái/phải (vd "front_door") -> thêm phía theo góc chụp
-                if side and "trái" not in name and "phải" not in name and best.cls_name in (
-                        "front_door", "back_door", "front_light", "back_light", "wheel"):
-                    name = f"{name} {side}"
+                cls = best.cls_name
+                name = PART_VI.get(cls, cls)
+                if "left" in cls or "right" in cls or cls in SIDED_GENERIC:
+                    # Bỏ trái/phải do model đoán, thay bằng phía suy ra từ góc chụp
+                    base = name.replace(" trái", "").replace(" phải", "").strip()
+                    x, _, bw, _ = cv2.boundingRect(det.polygon.astype(np.int32))
+                    side = visible_side(angle, (x + bw / 2) / w)
+                    name = f"{base} {side}".strip()
                 return name
         x, y, bw, bh = cv2.boundingRect(det.polygon.astype(np.int32))
         return heuristic_part(angle, (x + bw / 2) / w, (y + bh / 2) / h)
