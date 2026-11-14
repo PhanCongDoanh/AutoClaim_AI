@@ -15,17 +15,30 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class S3StorageService {
+
+    private static final Duration DOWNLOAD_TIMEOUT = Duration.ofSeconds(10);
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
 
     private final S3Client s3Client;
 
@@ -66,6 +79,40 @@ public class S3StorageService {
         }
 
         return buildPublicUrl(key);
+    }
+
+    /**
+     * Best-effort download of a stored file (e.g. an inspection photo for the PDF report). Objects of this
+     * bucket are read through the S3 API (no need for a public bucket); other URLs over HTTP with short timeouts.
+     * Never throws: any failure returns an empty Optional.
+     */
+    public Optional<byte[]> download(String url) {
+        if (!StringUtils.hasText(url)) {
+            return Optional.empty();
+        }
+        String key = extractKey(url);
+        if (key != null) {
+            try {
+                return Optional.of(s3Client.getObjectAsBytes(
+                        GetObjectRequest.builder().bucket(bucketName).key(key).build()).asByteArray());
+            } catch (SdkException ex) {
+                log.warn("Failed to download object '{}' from bucket '{}': {}", key, bucketName, ex.getMessage());
+                return Optional.empty();
+            }
+        }
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(DOWNLOAD_TIMEOUT).GET().build();
+            HttpResponse<byte[]> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() / 100 == 2) {
+                return Optional.of(response.body());
+            }
+            log.warn("Failed to download '{}': HTTP {}", url, response.statusCode());
+        } catch (IOException | IllegalArgumentException ex) {
+            log.warn("Failed to download '{}': {}", url, ex.getMessage());
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+        return Optional.empty();
     }
 
     /** Best-effort delete; never throws, so it is safe to call from cleanup paths. */

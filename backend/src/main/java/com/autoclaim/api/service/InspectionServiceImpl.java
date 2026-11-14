@@ -3,10 +3,12 @@ package com.autoclaim.api.service;
 import com.autoclaim.api.dto.request.CheckInRequest;
 import com.autoclaim.api.dto.request.CheckOutRequest;
 import com.autoclaim.api.dto.request.OverrideDamageRequest;
+import com.autoclaim.api.dto.response.AiProgressDto;
 import com.autoclaim.api.dto.response.DamageDto;
 import com.autoclaim.api.dto.response.ImageResultDto;
 import com.autoclaim.api.dto.response.InspectionResponseDto;
 import com.autoclaim.api.dto.response.SessionResultResponseDto;
+import com.autoclaim.api.dto.response.VehicleResponseDto;
 import com.autoclaim.api.entity.Booking;
 import com.autoclaim.api.entity.DamageDetection;
 import com.autoclaim.api.entity.InspectionImage;
@@ -14,11 +16,13 @@ import com.autoclaim.api.entity.InspectionSession;
 import com.autoclaim.api.entity.Renter;
 import com.autoclaim.api.entity.User;
 import com.autoclaim.api.entity.Vehicle;
+import com.autoclaim.api.entity.enums.AiStatus;
 import com.autoclaim.api.entity.enums.AngleCode;
 import com.autoclaim.api.entity.enums.BookingStatus;
 import com.autoclaim.api.entity.enums.SessionType;
 import com.autoclaim.api.entity.enums.VehicleStatus;
 import com.autoclaim.api.exception.BadRequestException;
+import com.autoclaim.api.exception.ConflictException;
 import com.autoclaim.api.exception.ResourceNotFoundException;
 import com.autoclaim.api.repository.BookingRepository;
 import com.autoclaim.api.repository.DamageDetectionRepository;
@@ -29,25 +33,25 @@ import com.autoclaim.api.repository.UserRepository;
 import com.autoclaim.api.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -55,6 +59,9 @@ import java.util.UUID;
 public class InspectionServiceImpl implements InspectionService {
 
     private static final String DEFAULT_STAFF_EMAIL = "staff@autoclaim.com";
+
+    /** A PENDING/PROCESSING session older than this may be retried when the AI service has lost it. */
+    private static final Duration AI_STUCK_AFTER = Duration.ofMinutes(2);
 
     private static final List<AngleCode> CHECK_IN_ANGLES = List.of(
             AngleCode.CCCD_FRONT,
@@ -87,11 +94,9 @@ public class InspectionServiceImpl implements InspectionService {
     private final InspectionImageRepository inspectionImageRepository;
     private final DamageDetectionRepository damageDetectionRepository;
     private final UserRepository userRepository;
-    private final RestTemplate restTemplate;
     private final S3StorageService s3StorageService;
-
-    @Value("${app.ai.detect-url:http://localhost:5000/api/ai/detect}")
-    private String aiDetectUrl;
+    private final AiServiceClient aiServiceClient;
+    private final AiStatusUpdater aiStatusUpdater;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -159,36 +164,45 @@ public class InspectionServiceImpl implements InspectionService {
     public InspectionResponseDto checkOut(CheckOutRequest request, List<MultipartFile> images) {
         validateImages(images, CHECK_OUT_ANGLES.size(), "Check-out");
 
-        // a. Verify the Booking exists and is ACTIVE
-        Booking booking = bookingRepository.findById(request.bookingId())
+        // a. Lock the booking so two concurrent check-outs cannot both pass the checks below
+        Booking booking = bookingRepository.findByIdForUpdate(request.bookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", request.bookingId()));
 
+        // b. One check-out per booking: a repeated submit is sent to the existing session (before any upload)
+        inspectionSessionRepository.findFirstByBooking_BookingIdAndSessionTypeOrderByCreatedAtDesc(
+                        booking.getBookingId(), SessionType.CHECK_OUT)
+                .ifPresent(existing -> {
+                    throw new ConflictException(
+                            "Xe này đã được gửi check-out trước đó. Đang chuyển tới phiên check-out hiện có.",
+                            Map.of("sessionId", existing.getSessionId()));
+                });
+
         if (booking.getStatus() != BookingStatus.ACTIVE) {
+            throw new BadRequestException("Lượt thuê này đã kết thúc, không thể check-out.");
+        }
+
+        Vehicle vehicle = booking.getVehicle();
+        if (vehicle.getStatus() != VehicleStatus.RENTED) {
             throw new BadRequestException(
-                    "Booking %s is not active (current status: %s)"
-                            .formatted(booking.getBookingId(), booking.getStatus()));
+                    "Xe %s không ở trạng thái Đang thuê nên không thể check-out.".formatted(vehicle.getLicensePlate()));
         }
 
         User staff = resolveCurrentStaff();
 
-        // b. Create an InspectionSession with type CHECK_OUT linked to the active Booking
+        // c. Create the CHECK_OUT session; the AI service moves it to PROCESSING / DONE / FAILED
         InspectionSession session = InspectionSession.builder()
                 .booking(booking)
                 .staff(staff)
                 .sessionType(SessionType.CHECK_OUT)
+                .aiStatus(AiStatus.PENDING)
                 .build();
         session = inspectionSessionRepository.saveAndFlush(session);
 
-        // c. Upload the 8 images to S3 (ANGLE_1 to ANGLE_8) and save their URLs
+        // d. Upload the 8 images to S3 (ANGLE_1 to ANGLE_8) and save their URLs
         List<InspectionImage> savedImages = saveInspectionImages(session, images, CHECK_OUT_ANGLES);
 
-        // d. AI Trigger: POST {"sessionId": "<the_new_session_id>"} to http://localhost:5000/api/ai/detect
-        boolean aiTriggered = triggerAiDetection(session.getSessionId());
-        String statusMessage = aiTriggered
-                ? "Check-out images saved successfully. AI is processing."
-                : "Check-out images saved successfully. AI is pending (service unreachable).";
-
-        Vehicle vehicle = booking.getVehicle();
+        // e. Trigger the AI only once the images are committed and visible to it
+        triggerAiAfterCommit(session.getSessionId());
 
         return InspectionResponseDto.builder()
                 .sessionId(session.getSessionId())
@@ -199,48 +213,55 @@ public class InspectionServiceImpl implements InspectionService {
                 .vehicleStatus(vehicle.getStatus())
                 .imageCount(savedImages.size())
                 .createdAt(session.getCreatedAt())
-                .message(statusMessage)
+                .message("Check-out images saved successfully. AI analysis will start shortly.")
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public SessionResultResponseDto getSessionResults(UUID sessionId) {
-        InspectionSession session = inspectionSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException("InspectionSession", sessionId));
+        InspectionSession session = findSession(sessionId);
+        Booking booking = session.getBooking();
+        Vehicle vehicle = booking.getVehicle();
+        Renter renter = booking.getRenter();
+        boolean isCheckOut = session.getSessionType() == SessionType.CHECK_OUT;
 
-        // Build angleCode -> check-in image map for the side-by-side comparison slider
+        InspectionSession checkInSession = isCheckOut
+                ? inspectionSessionRepository.findFirstByBooking_BookingIdAndSessionTypeOrderByCreatedAtDesc(
+                        booking.getBookingId(), SessionType.CHECK_IN).orElse(null)
+                : session;
+
+        // angleCode -> check-in image, so each check-out image can be compared with its counterpart
         Map<AngleCode, InspectionImage> checkInImageByAngle = new EnumMap<>(AngleCode.class);
-        UUID bookingId = session.getBooking().getBookingId();
-        inspectionSessionRepository.findFirstByBooking_BookingIdAndSessionTypeOrderByCreatedAtDesc(
-                        bookingId, SessionType.CHECK_IN)
-                .ifPresent(checkInSession -> {
-                    for (InspectionImage checkInImg : inspectionImageRepository.findBySession_SessionId(
-                            checkInSession.getSessionId())) {
-                        if (checkInImg.getAngleCode() != null) {
-                            checkInImageByAngle.putIfAbsent(checkInImg.getAngleCode(), checkInImg);
-                        }
-                    }
-                });
+        if (isCheckOut && checkInSession != null) {
+            for (InspectionImage checkInImg : inspectionImageRepository.findBySession_SessionId(
+                    checkInSession.getSessionId())) {
+                if (checkInImg.getAngleCode() != null) {
+                    checkInImageByAngle.putIfAbsent(checkInImg.getAngleCode(), checkInImg);
+                }
+            }
+        }
 
-        List<InspectionImage> images = inspectionImageRepository.findBySession_SessionId(sessionId);
+        Map<UUID, List<DamageDto>> damagesByImage = damageDetectionRepository.findByImage_Session_SessionId(sessionId)
+                .stream()
+                .sorted(InspectionLabels.DAMAGE_ORDER)
+                .collect(Collectors.groupingBy(
+                        damage -> damage.getImage().getImageId(),
+                        LinkedHashMap::new,
+                        Collectors.mapping(DamageDto::fromEntity, Collectors.toList())));
 
-        List<ImageResultDto> imageResults = images.stream()
+        List<ImageResultDto> imageResults = inspectionImageRepository.findBySession_SessionId(sessionId)
+                .stream()
+                .sorted(Comparator.comparing(InspectionImage::getAngleCode))
                 .map(image -> {
-                    List<DamageDto> damages = damageDetectionRepository.findByImage_ImageId(image.getImageId())
-                            .stream()
-                            .map(DamageDto::fromEntity)
-                            .toList();
-
                     InspectionImage checkInImage = checkInImageByAngle.get(image.getAngleCode());
-
                     return ImageResultDto.builder()
                             .imageId(image.getImageId())
                             .imageUrl(image.getImageUrl())
                             .checkInImageId(checkInImage != null ? checkInImage.getImageId() : null)
                             .checkInImageUrl(checkInImage != null ? checkInImage.getImageUrl() : null)
                             .angleCode(image.getAngleCode())
-                            .damages(damages)
+                            .damages(damagesByImage.getOrDefault(image.getImageId(), List.of()))
                             .build();
                 })
                 .toList();
@@ -248,8 +269,77 @@ public class InspectionServiceImpl implements InspectionService {
         return SessionResultResponseDto.builder()
                 .sessionId(session.getSessionId())
                 .sessionType(session.getSessionType())
-                .vehicleId(session.getBooking().getVehicle().getVehicleId())
+                .aiStatus(isCheckOut ? AiStatus.forCheckOut(session.getAiStatus()) : null)
+                .createdAt(session.getCreatedAt())
+                .bookingId(booking.getBookingId())
+                .bookingStatus(booking.getStatus())
+                .expectedReturnAt(booking.getExpectedReturnAt())
+                .checkInSessionId(checkInSession != null ? checkInSession.getSessionId() : null)
+                .checkInAt(checkInSession != null ? checkInSession.getCreatedAt() : null)
+                .vehicleId(vehicle.getVehicleId())
+                .vehicle(VehicleResponseDto.fromEntity(vehicle))
+                .renterName(renter != null ? renter.getName() : null)
+                .renterPhone(renter != null ? renter.getPhoneNumber() : null)
+                .staffName(session.getStaff() != null ? session.getStaff().getName() : null)
                 .images(imageResults)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AiProgressDto getAiProgress(UUID sessionId) {
+        InspectionSession session = findCheckOutSession(sessionId);
+        String dbStatus = AiStatus.forCheckOut(session.getAiStatus());
+
+        AiServiceClient.StatusLookup lookup = aiServiceClient.fetchStatus(sessionId);
+        if (lookup.kind() == AiServiceClient.StatusLookup.Kind.FOUND) {
+            return toLiveProgress(sessionId, lookup.body());
+        }
+
+        // AI restarted (lost its in-memory state) or unreachable: only the stored status is known
+        return AiProgressDto.builder()
+                .sessionId(sessionId)
+                .status(dbStatus)
+                .progress(AiStatus.DONE.equals(dbStatus) ? 100 : 0)
+                .currentAngle(null)
+                .completedAngles(List.of())
+                .totalAngles(null)
+                .newDamages(null)
+                .error(null)
+                .live(false)
+                .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AiProgressDto retryAi(UUID sessionId) {
+        InspectionSession session = findCheckOutSession(sessionId);
+        Booking booking = bookingRepository.findByIdForUpdate(session.getBooking().getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", session.getBooking().getBookingId()));
+
+        if (booking.getStatus() != BookingStatus.ACTIVE) {
+            throw new ConflictException("Phiên trả xe đã hoàn tất, không thể chạy lại AI.");
+        }
+
+        String status = AiStatus.forCheckOut(session.getAiStatus());
+        switch (status) {
+            case AiStatus.FAILED -> { /* always retryable */ }
+            case AiStatus.DONE -> throw new ConflictException("AI đã phân tích xong phiên này, không cần chạy lại.");
+            case AiStatus.PENDING, AiStatus.PROCESSING -> ensureStuck(session, status);
+            default -> throw new ConflictException("Trạng thái AI không hợp lệ: " + status);
+        }
+
+        session.setAiStatus(AiStatus.PENDING);
+        inspectionSessionRepository.saveAndFlush(session);
+        triggerAiAfterCommit(sessionId);
+        log.info("AI re-run requested for check-out session {} (previous status {})", sessionId, status);
+
+        return AiProgressDto.builder()
+                .sessionId(sessionId)
+                .status(AiStatus.PENDING)
+                .progress(0)
+                .completedAngles(List.of())
+                .live(false)
                 .build();
     }
 
@@ -267,14 +357,24 @@ public class InspectionServiceImpl implements InspectionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> overrideDamage(UUID detectionId, OverrideDamageRequest request) {
+        if (request == null || !StringUtils.hasText(request.overrideReason())) {
+            throw new BadRequestException("Vui lòng chọn hoặc nhập lý do xoá lỗi AI.");
+        }
+
         DamageDetection detection = damageDetectionRepository.findById(detectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("DamageDetection", detectionId));
 
-        detection.setIsOverridden(true);
-        if (request != null && StringUtils.hasText(request.overrideReason())) {
-            detection.setOverrideReason(request.overrideReason().trim());
+        Booking booking = detection.getImage().getSession().getBooking();
+        if (booking.getStatus() == BookingStatus.COMPLETED) {
+            throw new ConflictException("Phiên trả xe đã hoàn tất, không thể thay đổi kết quả AI.");
         }
-        damageDetectionRepository.saveAndFlush(detection);
+
+        // Already overridden: keep the original reason (idempotent for double clicks)
+        if (!Boolean.TRUE.equals(detection.getIsOverridden())) {
+            detection.setIsOverridden(true);
+            detection.setOverrideReason(request.overrideReason().trim());
+            damageDetectionRepository.saveAndFlush(detection);
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("detectionId", detection.getDetectionId());
@@ -287,16 +387,22 @@ public class InspectionServiceImpl implements InspectionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public InspectionResponseDto completeInspection(UUID sessionId) {
-        InspectionSession session = inspectionSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException("InspectionSession", sessionId));
+        InspectionSession session = findCheckOutSession(sessionId);
 
-        if (session.getSessionType() != SessionType.CHECK_OUT) {
-            throw new BadRequestException(
-                    "Only CHECK_OUT sessions can be completed (session %s is %s)"
-                            .formatted(sessionId, session.getSessionType()));
+        Booking booking = bookingRepository.findByIdForUpdate(session.getBooking().getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", session.getBooking().getBookingId()));
+
+        if (booking.getStatus() == BookingStatus.COMPLETED) {
+            throw new ConflictException("Phiên trả xe này đã được hoàn tất trước đó.");
         }
 
-        Booking booking = session.getBooking();
+        String aiStatus = AiStatus.forCheckOut(session.getAiStatus());
+        if (!AiStatus.DONE.equals(aiStatus)) {
+            throw new ConflictException(
+                    "AI chưa phân tích xong (trạng thái: %s). Hãy đợi AI hoàn tất hoặc chạy lại AI trước khi hoàn tất."
+                            .formatted(aiStatus));
+        }
+
         Vehicle vehicle = booking.getVehicle();
 
         List<DamageDetection> validDamages = damageDetectionRepository
@@ -334,21 +440,92 @@ public class InspectionServiceImpl implements InspectionService {
                 .build();
     }
 
-    private boolean triggerAiDetection(UUID sessionId) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            Map<String, String> payload = Map.of("sessionId", sessionId.toString());
-            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(payload, headers);
+    // ------------------------------------------------------------------ AI helpers
 
-            restTemplate.postForEntity(aiDetectUrl, requestEntity, String.class);
-            log.info("Triggered Python AI detection for check-out session {} at {}", sessionId, aiDetectUrl);
-            return true;
-        } catch (RestClientException ex) {
-            log.error("AI Service is down at {} for session {}. Images are saved in DB; AI processing is pending: {}",
-                    aiDetectUrl, sessionId, ex.getMessage());
-            return false;
+    /**
+     * Calls the AI service after the current transaction commits (so it sees the saved images). A failed
+     * call never breaks the request: the session is marked FAILED so the UI can offer a retry.
+     */
+    private void triggerAiAfterCommit(UUID sessionId) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                if (!aiServiceClient.triggerDetection(sessionId)) {
+                    try {
+                        aiStatusUpdater.updateStatus(sessionId, AiStatus.FAILED);
+                    } catch (RuntimeException ex) {
+                        log.error("Could not mark session {} as FAILED after AI trigger error", sessionId, ex);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * PENDING/PROCESSING may only be retried when the run is clearly lost: the session is older than
+     * {@link #AI_STUCK_AFTER} and the AI service is not working on it (PROCESSING additionally requires
+     * the AI service to answer 404, i.e. it restarted and forgot the session).
+     */
+    private void ensureStuck(InspectionSession session, String status) {
+        LocalDateTime createdAt = session.getCreatedAt();
+        boolean oldEnough = createdAt != null && createdAt.plus(AI_STUCK_AFTER).isBefore(LocalDateTime.now());
+        if (!oldEnough) {
+            throw new ConflictException("AI đang phân tích phiên này. Vui lòng đợi thêm trước khi chạy lại.");
         }
+
+        AiServiceClient.StatusLookup lookup = aiServiceClient.fetchStatus(session.getSessionId());
+        boolean aiIsWorking = lookup.kind() == AiServiceClient.StatusLookup.Kind.FOUND
+                && isActiveAiStatus(lookup.body().get("status"));
+        boolean allowed = AiStatus.PENDING.equals(status)
+                ? !aiIsWorking
+                : lookup.kind() == AiServiceClient.StatusLookup.Kind.NOT_FOUND;
+        if (!allowed) {
+            throw new ConflictException("AI đang phân tích phiên này. Vui lòng đợi thêm trước khi chạy lại.");
+        }
+    }
+
+    private static boolean isActiveAiStatus(Object status) {
+        return "QUEUED".equals(status) || AiStatus.PROCESSING.equals(status);
+    }
+
+    private static AiProgressDto toLiveProgress(UUID sessionId, Map<String, Object> body) {
+        String rawStatus = body.get("status") instanceof String s ? s : AiStatus.PENDING;
+        String status = "QUEUED".equals(rawStatus) ? AiStatus.PENDING : rawStatus;
+
+        int progress = body.get("progress") instanceof Number n ? Math.max(0, Math.min(100, n.intValue())) : 0;
+        List<String> completed = body.get("completedAngles") instanceof List<?> list
+                ? list.stream().map(String::valueOf).toList()
+                : List.of();
+
+        return AiProgressDto.builder()
+                .sessionId(sessionId)
+                .status(status)
+                .progress(AiStatus.DONE.equals(status) ? 100 : progress)
+                .currentAngle(body.get("currentAngle") instanceof String angle ? angle : null)
+                .completedAngles(completed)
+                .totalAngles(body.get("totalAngles") instanceof Number n ? n.intValue() : null)
+                .newDamages(AiStatus.DONE.equals(status) && body.get("newDamages") instanceof Number n
+                        ? n.intValue() : null)
+                .error(body.get("error") instanceof String error ? error : null)
+                .live(true)
+                .build();
+    }
+
+    // ------------------------------------------------------------------ lookups & validation
+
+    private InspectionSession findSession(UUID sessionId) {
+        return inspectionSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("InspectionSession", sessionId));
+    }
+
+    private InspectionSession findCheckOutSession(UUID sessionId) {
+        InspectionSession session = findSession(sessionId);
+        if (session.getSessionType() != SessionType.CHECK_OUT) {
+            throw new BadRequestException(
+                    "Only CHECK_OUT sessions are supported here (session %s is %s)"
+                            .formatted(sessionId, session.getSessionType()));
+        }
+        return session;
     }
 
     private void validateImages(List<MultipartFile> images, int expectedCount, String workflowName) {
@@ -399,6 +576,7 @@ public class InspectionServiceImpl implements InspectionService {
         return inspectionImageRepository.saveAllAndFlush(entities);
     }
 
+    /** The logged-in staff member (set by {@code JwtAuthenticationFilter}), else the default staff account. */
     private User resolveCurrentStaff() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()

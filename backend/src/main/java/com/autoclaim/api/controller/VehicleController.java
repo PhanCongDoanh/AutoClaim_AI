@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -33,6 +34,12 @@ public class VehicleController {
             @RequestParam VehicleStatus status,
             @RequestParam(required = false) String search) {
         return ResponseEntity.ok(vehicleService.getVehicles(status, search));
+    }
+
+    @Operation(summary = "Count vehicles per status", description = "Returns {AVAILABLE, RENTED, MAINTENANCE} counts of non-deleted vehicles (0 when a status has none).")
+    @GetMapping("/counts")
+    public ResponseEntity<Map<VehicleStatus, Long>> getVehicleCounts() {
+        return ResponseEntity.ok(vehicleService.countByStatus());
     }
 
     @Operation(summary = "Complete vehicle maintenance", description = "Updates vehicle status from MAINTENANCE to AVAILABLE and optionally records maintenanceNotes on the latest booking.")

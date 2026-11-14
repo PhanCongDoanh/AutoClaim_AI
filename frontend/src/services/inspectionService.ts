@@ -1,4 +1,5 @@
 import type {
+  AiProgress,
   CheckInRequest,
   CheckOutRequest,
   InspectionResponse,
@@ -34,9 +35,21 @@ export const inspectionService = {
     return data
   },
 
+  /** Live AI progress of a CHECK_OUT session (falls back to the stored status, `live: false`). */
+  async getAiProgress(sessionId: UUID): Promise<AiProgress> {
+    const { data } = await axiosInstance.get<AiProgress>(`/inspections/${sessionId}/ai-progress`)
+    return data
+  },
+
+  /** Re-runs AI detection for a FAILED (or stuck) session. 409 when the AI is still working or already DONE. */
+  async retryAi(sessionId: UUID): Promise<AiProgress> {
+    const { data } = await axiosInstance.post<AiProgress>(`/inspections/${sessionId}/ai-retry`)
+    return data
+  },
+
   async overrideDamage(
     detectionId: UUID,
-    request?: OverrideDamageRequest,
+    request: OverrideDamageRequest,
   ): Promise<MessageResponse> {
     const { data } = await axiosInstance.patch<MessageResponse>(
       `/inspections/damages/${detectionId}/override`,

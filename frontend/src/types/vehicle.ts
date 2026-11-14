@@ -13,6 +13,10 @@ export interface VehicleResponse {
   renterName: string | null
   renterPhone: string | null
   checkInSessionId: UUID | null
+  /** When the vehicle was handed over (CHECK_IN session time); rented vehicles only. */
+  checkInAt: LocalDateTime | null
+  /** Agreed return time; rented vehicles only, may be null for old bookings. */
+  expectedReturnAt: LocalDateTime | null
   createdAt: LocalDateTime
   updatedAt: LocalDateTime
 }
@@ -30,6 +34,9 @@ export interface VehicleFormData {
 export interface CompleteMaintenanceRequest {
   maintenanceNotes?: string
 }
+
+/** Mirrors `GET /api/vehicles/counts`: non-deleted vehicles per status (0 when none). */
+export type VehicleCounts = Record<VehicleStatus, number>
 
 export interface VehicleQuery {
   status: VehicleStatus

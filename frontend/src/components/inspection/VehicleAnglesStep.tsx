@@ -1,4 +1,5 @@
-import { CircleCheck, Lock } from 'lucide-react'
+import { CircleCheck } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { AngleDiagram } from '@/components/inspection/AngleDiagram'
 import { PhotoCaptureBox } from '@/components/inspection/PhotoCaptureBox'
 import { ANGLE_LABELS, VEHICLE_PHOTO_KEYS } from '@/components/inspection/photoAngles'
@@ -12,9 +13,27 @@ interface VehicleAnglesStepProps {
   onCapture: (key: AngleCode, file: File) => void
   readyCount: number
   disabled: boolean
+  /** Heading next to the progress bar, e.g. "Ảnh ngoại thất" / "Ảnh trả xe". */
+  title: string
+  /** Shown below the photo grid (e.g. what happens on submit). */
+  note?: ReactNode
+  /** Shown below the angle diagram in the left column. */
+  aside?: ReactNode
+  /** Check-in photo per angle, shown as a small reference in the corner of each box. */
+  referenceUrls?: Partial<Record<AngleCode, string>>
 }
 
-export function VehicleAnglesStep({ getSlot, onCapture, readyCount, disabled }: VehicleAnglesStepProps) {
+/** Angle diagram + 8 capture boxes, shared by check-in and check-out. */
+export function VehicleAnglesStep({
+  getSlot,
+  onCapture,
+  readyCount,
+  disabled,
+  title,
+  note,
+  aside,
+  referenceUrls,
+}: VehicleAnglesStepProps) {
   const total = VEHICLE_PHOTO_KEYS.length
   const isComplete = readyCount === total
   const isCaptured = (key: AngleCode) => isSlotReady(getSlot(key))
@@ -71,6 +90,7 @@ export function VehicleAnglesStep({ getSlot, onCapture, readyCount, disabled }: 
               slot={getSlot(key)}
               onSelect={(file) => onCapture(key, file)}
               disabled={disabled}
+              referenceUrl={referenceUrls?.[key]}
             />
           ))}
         </div>

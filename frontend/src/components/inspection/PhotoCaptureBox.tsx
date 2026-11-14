@@ -18,6 +18,8 @@ interface PhotoCaptureBoxProps {
   /** Placeholder art for the empty state. */
   placeholder?: ReactNode
   disabled?: boolean
+  /** Original (check-in) photo of this angle, shown small in the bottom-right corner as a framing guide. */
+  referenceUrl?: string
 }
 
 function formatTime(date: Date): string {
@@ -32,6 +34,7 @@ export function PhotoCaptureBox({
   index,
   placeholder,
   disabled = false,
+  referenceUrl,
 }: PhotoCaptureBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const { photo, isCompressing, error } = slot
@@ -98,6 +101,12 @@ export function PhotoCaptureBox({
       {variant === 'angle' && index !== undefined && (
         <span className="absolute left-2 top-2 flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-700 px-1.5 text-xs font-bold text-white shadow-sm">
           {index}
+        </span>
+      )}
+
+      {variant === 'angle' && referenceUrl && (
+        <span className="pointer-events-none absolute bottom-2 right-2 w-1/4 min-w-12 overflow-hidden rounded-md border-2 border-white bg-muted shadow-md">
+          <img src={referenceUrl} alt={`Ảnh gốc check-in: ${label}`} className="aspect-[4/3] w-full object-cover" loading="lazy" />
         </span>
       )}
 

@@ -10,8 +10,15 @@ interface VehicleCardProps {
   vehicle: VehicleResponse
   /** Rendered in the top-right corner of the image (e.g. an actions dropdown). */
   menu?: ReactNode
-  /** Replaces the default staff actions (check-in / check-out links) in the footer. */
+  /** Replaces the default staff actions (check-in link / check-out button) in the footer. */
   actions?: ReactNode
+  /**
+   * Rented vehicles: clicking the card or its "Check-out" button calls this (e.g. to open a details
+   * sheet). Without it the button links straight to the check-out page.
+   */
+  onSelect?: (vehicle: VehicleResponse) => void
+  /** Highlights the card (e.g. while its details sheet is open). */
+  selected?: boolean
 }
 
 /** Classes for the full-width tinted action button at the bottom of a card. */
@@ -21,6 +28,9 @@ export const VEHICLE_CARD_ACTION_CLASS =
 export function VehicleCard({ vehicle, menu, actions }: VehicleCardProps) {
   const { vehicleId, model, licensePlate, seats, status, avatarUrl } = vehicle
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  const isRented = status === 'RENTED'
+  const canSelect = isRented && Boolean(onSelect)
+  const dueState = getDueState(vehicle.expectedReturnAt)
 
   return (
     <div className="group/card flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_4px_16px_-8px_rgba(15,23,42,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-16px_rgba(30,64,175,0.35)]">

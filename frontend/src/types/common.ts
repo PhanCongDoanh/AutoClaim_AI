@@ -12,6 +12,8 @@ export interface ErrorResponse {
   message: string
   path: string
   fieldErrors?: Record<string, string> | null
+  /** Extra data, e.g. `{ sessionId }` on a 409 when the booking already has a check-out session. */
+  details?: Record<string, unknown> | null
 }
 
 /** Generic `Map<String, Object>` responses (delete / override endpoints). */

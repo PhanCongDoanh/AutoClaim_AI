@@ -1,4 +1,4 @@
-import { Car, Check, Users } from 'lucide-react'
+import { Car, Check, User, Users } from 'lucide-react'
 import { Fragment } from 'react'
 import { cn } from '@/lib/utils'
 import type { VehicleResponse } from '@/types'
@@ -7,12 +7,25 @@ import { CHECK_IN_CARD_CLASS } from './SectionCardHeader'
 const STEPS = ['Thông tin khách & CCCD', 'Chụp 8 góc xe'] as const
 
 interface VehicleSummaryCardProps {
-  vehicle: VehicleResponse
-  /** 1-based active step. */
-  step: 1 | 2
+  vehicle: VehicleSummary
+  /** Step labels of the current workflow, in order. */
+  steps: readonly string[]
+  /** 1-based active step; steps before it are shown as done. */
+  step: number
+  /** Optional renter name shown next to the seat count (check-out). */
+  renterName?: string | null
+  /** Accessible name of the step list, e.g. "Các bước check-out". */
+  stepsLabel?: string
 }
 
-export function VehicleSummaryCard({ vehicle, step }: VehicleSummaryCardProps) {
+/** Vehicle header card with a horizontal stepper, shared by the check-in and check-out flows. */
+export function VehicleSummaryCard({
+  vehicle,
+  steps,
+  step,
+  renterName,
+  stepsLabel = 'Các bước thực hiện',
+}: VehicleSummaryCardProps) {
   return (
     <div
       className={cn(
@@ -42,8 +55,8 @@ export function VehicleSummaryCard({ vehicle, step }: VehicleSummaryCardProps) {
         </div>
       </div>
 
-      <ol className="flex shrink-0 items-center gap-3" aria-label="Các bước check-in">
-        {STEPS.map((label, index) => {
+      <ol className="flex shrink-0 flex-wrap items-center gap-3" aria-label={stepsLabel}>
+        {steps.map((label, index) => {
           const number = index + 1
           const isDone = number < step
           const isActive = number === step

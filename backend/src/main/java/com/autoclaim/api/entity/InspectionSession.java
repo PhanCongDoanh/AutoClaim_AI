@@ -1,5 +1,6 @@
 package com.autoclaim.api.entity;
 
+import com.autoclaim.api.entity.enums.AiStatus;
 import com.autoclaim.api.entity.enums.SessionType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -49,6 +50,13 @@ public class InspectionSession {
     @Enumerated(EnumType.STRING)
     @Column(name = "session_type", nullable = false, length = 50)
     private SessionType sessionType;
+
+    /**
+     * AI processing state of a CHECK_OUT session, one of {@link AiStatus}. Null for CHECK_IN sessions
+     * (and for check-outs created before V6). Kept as a String because the AI service writes it directly.
+     */
+    @Column(name = "ai_status", length = 20)
+    private String aiStatus;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

@@ -7,8 +7,13 @@ import { Input } from '@/components/ui/input'
 import { VehicleCard } from '@/components/vehicle/VehicleCard'
 import { VehicleGridSkeleton } from '@/components/vehicle/VehicleGridSkeleton'
 import { VehicleStatusTabs } from '@/components/vehicle/VehicleStatusTabs'
+import { useVehicleCounts } from '@/hooks/useVehicleCounts'
 import { useVehicles } from '@/hooks/useVehicles'
-import type { VehicleStatus } from '@/types'
+import { saveBlob } from '@/lib/download'
+import { getErrorMessage } from '@/services/apiClient'
+import { inspectionService } from '@/services/inspectionService'
+import type { UUID, VehicleResponse, VehicleStatus } from '@/types'
+import { RentedVehicleSheet } from './dashboard/RentedVehicleSheet'
 import type { DashboardLocationState } from './dashboardState'
 
 const EMPTY_MESSAGES: Record<VehicleStatus, string> = {
@@ -22,8 +27,13 @@ type VehiclesResult = ReturnType<typeof useVehicles>
 /** "Danh sách xe" tab (CarListTab). */
 export default function Dashboard() {
   const location = useLocation()
-  const checkedIn = (location.state as DashboardLocationState | null)?.checkedIn
-  const [status, setStatus] = useState<VehicleStatus>(checkedIn ? 'RENTED' : 'AVAILABLE')
+  const navigate = useNavigate()
+  const locationState = location.state as DashboardLocationState | null
+  const checkedIn = locationState?.checkedIn
+  const checkedOut = locationState?.checkedOut
+  const [status, setStatus] = useState<VehicleStatus>(
+    checkedOut?.vehicleStatus ?? (checkedIn ? 'RENTED' : 'AVAILABLE'),
+  )
   const [search, setSearch] = useState('')
   const [showNotice, setShowNotice] = useState(Boolean(checkedIn))
 
@@ -91,6 +101,8 @@ export default function Dashboard() {
           <VehicleGrid {...vehiclesByStatus[tabStatus]} search={search} emptyMessage={EMPTY_MESSAGES[tabStatus]} />
         )}
       </VehicleStatusTabs>
+
+      <RentedVehicleSheet vehicle={selectedVehicle} onOpenChange={(open) => !open && setSelectedVehicle(null)} />
     </section>
   )
 }
@@ -98,6 +110,9 @@ export default function Dashboard() {
 interface VehicleGridProps extends VehiclesResult {
   search: string
   emptyMessage: string
+  selectedVehicleId?: string
+  /** Rented vehicles open the details sheet (mockup 06) instead of going straight to check-out. */
+  onSelectVehicle: (vehicle: VehicleResponse) => void
 }
 
 function VehicleGrid({ vehicles, isLoading, error, refetch, search, emptyMessage }: VehicleGridProps) {
@@ -134,7 +149,12 @@ function VehicleGrid({ vehicles, isLoading, error, refetch, search, emptyMessage
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {vehicles.map((vehicle) => (
-        <VehicleCard key={vehicle.vehicleId} vehicle={vehicle} />
+        <VehicleCard
+          key={vehicle.vehicleId}
+          vehicle={vehicle}
+          onSelect={onSelectVehicle}
+          selected={vehicle.vehicleId === selectedVehicleId}
+        />
       ))}
     </div>
   )

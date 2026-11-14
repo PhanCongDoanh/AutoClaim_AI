@@ -8,6 +8,9 @@ import {
   ID_CARD_PHOTO_KEYS,
   VEHICLE_PHOTO_KEYS,
 } from '@/components/inspection/photoAngles'
+import { SelectVehiclePrompt } from '@/components/inspection/SelectVehiclePrompt'
+import { VehicleAnglesStep } from '@/components/inspection/VehicleAnglesStep'
+import { VehicleSummaryCard } from '@/components/inspection/VehicleSummaryCard'
 import { Button } from '@/components/ui/button'
 import { usePhotoCapture } from '@/hooks/usePhotoCapture'
 import { useVehicles } from '@/hooks/useVehicles'
@@ -27,6 +30,8 @@ import { CHECK_IN_CARD_CLASS } from './check-in/SectionCardHeader'
 import { VehicleAnglesStep } from './check-in/VehicleAnglesStep'
 import { VehicleSummaryCard } from './check-in/VehicleSummaryCard'
 import type { DashboardLocationState } from './dashboardState'
+
+const CHECK_IN_STEPS = ['Thông tin khách & CCCD', 'Chụp 8 góc xe'] as const
 
 const STEP_DESCRIPTIONS = {
   1: 'Bước 1/2 — Nhập thông tin người thuê và chụp CCCD 2 mặt.',
@@ -101,10 +106,13 @@ export default function CheckIn() {
       </div>
 
       {!vehicleId || isVehicleLoading || !vehicle ? (
-        <VehicleNotReady state={!vehicleId ? 'missing' : isVehicleLoading ? 'loading' : 'unavailable'} />
+        <SelectVehiclePrompt
+          isLoading={Boolean(vehicleId) && isVehicleLoading}
+          reason={vehicleId ? 'Xe này không còn sẵn sàng cho thuê.' : 'Chưa chọn xe để check-in.'}
+        />
       ) : (
         <>
-          <VehicleSummaryCard vehicle={vehicle} step={step} />
+          <VehicleSummaryCard vehicle={vehicle} steps={CHECK_IN_STEPS} step={step} stepsLabel="Các bước check-in" />
 
           {step === 1 ? (
             <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
@@ -118,10 +126,20 @@ export default function CheckIn() {
             </div>
           ) : (
             <VehicleAnglesStep
+              title="Ảnh ngoại thất"
               getSlot={getSlot}
               onCapture={capture}
               readyCount={vehicleReady}
               disabled={isSubmitting}
+              note={
+                <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                  <p>
+                    Khi bấm <strong>Xác nhận cho thuê</strong>, 8 ảnh được lưu làm ảnh gốc của phiên thuê và
+                    xe tự động chuyển sang <strong>Đang thuê</strong>.
+                  </p>
+                </div>
+              }
             />
           )}
 

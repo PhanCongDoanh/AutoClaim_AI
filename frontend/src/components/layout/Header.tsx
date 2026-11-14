@@ -38,6 +38,7 @@ interface NavItem {
 
 const NAV_ITEMS_BY_ROLE: Record<Role, NavItem[]> = {
   STAFF: [
+    // Check-in / check-out are started from a vehicle card, so they are not menu entries.
     { to: '/staff', label: 'Danh sách xe', icon: Car, end: true },
     { to: '/staff/check-in', label: 'Check-in', icon: LogIn },
     { to: '/staff/check-out', label: 'Check-out', icon: LogOut },
