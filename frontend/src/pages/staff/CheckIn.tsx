@@ -1,6 +1,7 @@
-import { ArrowLeft, ArrowRight, Check, CircleCheck, Loader2, Lock, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Car, Check, CircleCheck, Loader2, Lock, LogIn, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { PAGE_PRIMARY_ACTION_CLASS, PageHeader } from '@/components/layout/PageHeader'
 import { StickyActionBar } from '@/components/layout/StickyActionBar'
 import {
   CHECK_IN_PHOTO_KEYS,
@@ -25,6 +26,9 @@ import {
   type RenterFormErrors,
   type RenterFormValues,
 } from './check-in/renterForm'
+import { CHECK_IN_CARD_CLASS } from './check-in/SectionCardHeader'
+import { VehicleAnglesStep } from './check-in/VehicleAnglesStep'
+import { VehicleSummaryCard } from './check-in/VehicleSummaryCard'
 import type { DashboardLocationState } from './dashboardState'
 
 const CHECK_IN_STEPS = ['Thông tin khách & CCCD', 'Chụp 8 góc xe'] as const
@@ -89,16 +93,16 @@ export default function CheckIn() {
   }
 
   return (
-    <section className="mx-auto max-w-6xl space-y-6 pb-28">
-      <div>
-        <Button asChild variant="link" size="sm" className="h-auto px-0 text-muted-foreground">
-          <Link to="/staff">
-            <ArrowLeft />
-            Quay lại danh sách xe
-          </Link>
-        </Button>
-        <h1 className="mt-2 text-2xl font-semibold text-foreground">Check-in · Tạo phiên thuê xe</h1>
-        <p className="text-sm text-muted-foreground">{STEP_DESCRIPTIONS[step]}</p>
+    <section className="mx-auto max-w-6xl space-y-5 pb-2">
+      <div className="space-y-4">
+        <Link
+          to="/staff"
+          className="inline-flex items-center gap-2 text-[14px] font-semibold text-slate-800 transition-colors hover:text-brand-600"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Quay lại danh sách xe
+        </Link>
+        <PageHeader icon={LogIn} title="Check-in · Tạo phiên thuê xe" description={STEP_DESCRIPTIONS[step]} />
       </div>
 
       {!vehicleId || isVehicleLoading || !vehicle ? (
@@ -111,7 +115,7 @@ export default function CheckIn() {
           <VehicleSummaryCard vehicle={vehicle} steps={CHECK_IN_STEPS} step={step} stepsLabel="Các bước check-in" />
 
           {step === 1 ? (
-            <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+            <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
               <RenterInfoCard values={values} errors={errors} onChange={updateField} />
               <IdCardPhotosCard
                 getSlot={getSlot}
@@ -142,9 +146,9 @@ export default function CheckIn() {
           {submitError && (
             <div
               role="alert"
-              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+              className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
             >
-              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
               <p>Check-in thất bại: {submitError}</p>
             </div>
           )}
@@ -153,15 +157,15 @@ export default function CheckIn() {
             <StickyActionBar
               info={
                 <span className="inline-flex items-center gap-2">
-                  <Lock className="h-4 w-4" />
+                  <Lock className="h-4 w-4 text-slate-500" />
                   Ảnh CCCD chỉ dùng để lưu hồ sơ phiên thuê.
                 </span>
               }
             >
-              <Button asChild variant="ghost">
+              <Button asChild variant="ghost" className="h-11 rounded-xl px-5 font-semibold text-slate-800">
                 <Link to="/staff">Hủy</Link>
               </Button>
-              <Button onClick={handleContinue}>
+              <Button onClick={handleContinue} className={PAGE_PRIMARY_ACTION_CLASS}>
                 Tiếp tục: Chụp 8 góc xe
                 <ArrowRight />
               </Button>
@@ -175,11 +179,16 @@ export default function CheckIn() {
                 </>
               }
             >
-              <Button variant="secondary" onClick={() => goToStep(1)} disabled={isSubmitting}>
+              <Button
+                variant="secondary"
+                className="h-11 rounded-xl border-slate-200 bg-white px-5 font-semibold text-slate-800 [&_svg]:size-5"
+                onClick={() => goToStep(1)}
+                disabled={isSubmitting}
+              >
                 <ArrowLeft />
                 Quay lại
               </Button>
-              <Button onClick={handleSubmit} disabled={!allPhotos || isSubmitting}>
+              <Button onClick={handleSubmit} disabled={!allPhotos || isSubmitting} className={PAGE_PRIMARY_ACTION_CLASS}>
                 {isSubmitting ? <Loader2 className="animate-spin" /> : <Check />}
                 {isSubmitting ? 'Đang tải ảnh lên…' : 'Xác nhận cho thuê'}
               </Button>
@@ -194,9 +203,36 @@ export default function CheckIn() {
 function ProgressTag({ done, total, label }: { done: number; total: number; label: string }) {
   const isComplete = done === total
   return (
-    <span className={cn('inline-flex items-center gap-1.5', isComplete && 'text-emerald-700')}>
-      <CircleCheck className="h-4 w-4" />
+    <span
+      className={cn(
+        'inline-flex items-center gap-2 font-medium',
+        isComplete ? 'text-emerald-600' : 'text-slate-600',
+      )}
+    >
+      <CircleCheck className="h-[18px] w-[18px]" />
       {done}/{total} {label}
     </span>
+  )
+}
+
+/** Empty state of the Check-in tab when no (available) vehicle is selected. */
+function VehicleNotReady({ state }: { state: 'missing' | 'loading' | 'unavailable' }) {
+  return (
+    <div className={cn(CHECK_IN_CARD_CLASS, 'flex items-center gap-4 px-6 py-5')}>
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#e9f0fd] text-brand-600">
+        {state === 'loading' ? <Loader2 className="h-6 w-6 animate-spin" /> : <Car className="h-6 w-6" />}
+      </span>
+      {state === 'loading' ? (
+        <p className="text-[15px] text-slate-600">Đang tải thông tin xe…</p>
+      ) : (
+        <p className="text-[15px] text-slate-700">
+          {state === 'missing' ? 'Chưa chọn xe. ' : 'Xe này không còn sẵn sàng cho thuê. '}
+          <Link to="/staff" className="font-semibold text-brand-600 hover:underline">
+            Chọn một xe đang sẵn sàng
+          </Link>{' '}
+          từ danh sách.
+        </p>
+      )}
+    </div>
   )
 }

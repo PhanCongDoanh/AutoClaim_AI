@@ -37,5 +37,11 @@
 
   body {
     @apply bg-background font-sans text-foreground antialiased;
+    /* Very light blue gradient fading into white. */
+    background-image:
+      radial-gradient(900px 520px at 100% 0%, rgba(207, 223, 250, 0.7), transparent 70%),
+      radial-gradient(800px 480px at 0% 0%, rgba(232, 240, 253, 0.9), transparent 70%),
+      linear-gradient(180deg, #e8effb 0%, #f2f6fd 40%, #ffffff 100%);
+    background-attachment: fixed;
   }
 }
