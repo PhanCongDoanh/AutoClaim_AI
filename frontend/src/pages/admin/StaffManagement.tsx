@@ -1,6 +1,7 @@
-import { AlertCircle, CircleCheck, Crown, Pencil, RotateCw, Trash2, UserPlus } from 'lucide-react'
+import { AlertCircle, CircleCheck, Crown, Pencil, RotateCw, Trash2, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { PAGE_PRIMARY_ACTION_CLASS, PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useAdminStaff } from '@/hooks/useAdminStaff'
@@ -177,19 +178,18 @@ export default function StaffManagement() {
   }
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Nhân viên</h1>
-          <p className="text-sm text-muted-foreground">
-            Chỉ Quản trị viên mới thấy trang này. Thêm, sửa hoặc xóa tài khoản nhân viên.
-          </p>
-        </div>
-        <Button onClick={() => setFormState({ open: true, staff: null })}>
-          <UserPlus />
-          Thêm nhân viên
-        </Button>
-      </div>
+    <section className="space-y-7">
+      <PageHeader
+        icon={Users}
+        title="Nhân viên"
+        description="Chỉ Quản trị viên mới thấy trang này. Thêm, sửa hoặc xóa tài khoản nhân viên."
+        actions={
+          <Button className={PAGE_PRIMARY_ACTION_CLASS} onClick={() => setFormState({ open: true, staff: null })}>
+            <UserPlus />
+            Thêm nhân viên
+          </Button>
+        }
+      />
 
       {error && staff.length > 0 && (
         <div
@@ -205,7 +205,7 @@ export default function StaffManagement() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-white/70 bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.12)]">
         <Table aria-busy={isLoading}>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

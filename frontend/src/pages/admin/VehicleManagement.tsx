@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   Camera,
+  Car,
   History,
   Loader2,
   LogOut,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { PAGE_PRIMARY_ACTION_CLASS, PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -23,11 +25,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { VehicleCard } from '@/components/vehicle/VehicleCard'
+import { VEHICLE_CARD_ACTION_CLASS, VehicleCard } from '@/components/vehicle/VehicleCard'
 import { VehicleGridSkeleton } from '@/components/vehicle/VehicleGridSkeleton'
 import { VehicleStatusTabs } from '@/components/vehicle/VehicleStatusTabs'
 import { VEHICLE_STATUS_META } from '@/components/vehicle/vehicleStatus'
 import { useAdminVehicles } from '@/hooks/useAdminVehicles'
+import { cn } from '@/lib/utils'
 import { getErrorMessage } from '@/services/apiClient'
 import { vehicleService } from '@/services/vehicleService'
 import type { UUID, VehicleResponse, VehicleStatus } from '@/types'
@@ -146,7 +149,7 @@ export default function VehicleManagement() {
     }
 
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {tabVehicles.map((vehicle) => (
           <VehicleCard
             key={vehicle.vehicleId}
@@ -172,30 +175,31 @@ export default function VehicleManagement() {
   }
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Quản lý xe</h1>
-          <p className="text-sm text-muted-foreground">Chọn xe khách muốn thuê để bắt đầu Check-in.</p>
-        </div>
-        <div className="flex gap-3">
-          <div className="relative flex-1 sm:w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Tìm tên xe, biển số, tên khách..."
-              className="pl-9"
-              aria-label="Tìm xe"
-            />
-          </div>
-          <Button onClick={() => setFormState({ open: true, vehicle: null })}>
-            <Plus />
-            Thêm xe
-          </Button>
-        </div>
-      </div>
+    <section className="space-y-7">
+      <PageHeader
+        icon={Car}
+        title="Quản lý xe"
+        description="Chọn xe khách muốn thuê để bắt đầu Check-in."
+        actions={
+          <>
+            <div className="relative sm:w-[340px] xl:w-[370px]">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-500" />
+              <Input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Tìm tên xe, biển số, tên khách..."
+                className="h-11 rounded-xl border-slate-200 bg-white pl-10 text-[14px] placeholder:text-slate-500"
+                aria-label="Tìm xe"
+              />
+            </div>
+            <Button className={PAGE_PRIMARY_ACTION_CLASS} onClick={() => setFormState({ open: true, vehicle: null })}>
+              <Plus />
+              Thêm xe
+            </Button>
+          </>
+        }
+      />
 
       {error && vehicles.length > 0 && (
         <div
@@ -246,7 +250,7 @@ function VehicleActionsMenu({ vehicle, onEdit, onDelete }: VehicleActionsMenuPro
         <Button
           variant="secondary"
           size="icon"
-          className="h-8 w-8 bg-card/95 shadow-sm"
+          className="h-8 w-8 rounded-lg border-white/80 bg-white/95 text-slate-700 shadow-sm hover:bg-white"
           aria-label={`Thao tác cho ${vehicle.model}`}
         >
           <MoreHorizontal />
@@ -284,9 +288,8 @@ function AdminCardAction({ vehicle, isCompleting, onCompleteMaintenance }: Admin
   if (vehicle.status === 'MAINTENANCE') {
     return (
       <Button
-        variant="secondary"
-        size="sm"
-        className="w-full"
+        variant="soft"
+        className={VEHICLE_CARD_ACTION_CLASS}
         disabled={isCompleting}
         onClick={() => onCompleteMaintenance(vehicle)}
       >
@@ -297,12 +300,12 @@ function AdminCardAction({ vehicle, isCompleting, onCompleteMaintenance }: Admin
   }
 
   // Check-in/out runs on /staff routes, which ProtectedRoute limits to STAFF accounts.
+  // Kept full-colour (and hoverable for the tooltip) to match the design; clicks are still blocked by `disabled`.
   const isAvailable = vehicle.status === 'AVAILABLE'
   return (
     <Button
-      variant="secondary"
-      size="sm"
-      className="w-full"
+      variant="soft"
+      className={cn(VEHICLE_CARD_ACTION_CLASS, 'disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-100')}
       disabled
       title="Chỉ tài khoản Nhân viên thực hiện check-in / check-out"
     >

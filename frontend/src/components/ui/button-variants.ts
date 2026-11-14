@@ -9,6 +9,8 @@ export const buttonVariants = cva(
         secondary:
           'border border-input bg-card text-secondary-foreground shadow-sm hover:bg-secondary',
         destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+        /** Tinted blue button, e.g. the vehicle card "Check-in" action. */
+        soft: 'bg-[#e8effc] font-semibold text-brand-700 hover:bg-[#dce7fb]',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
