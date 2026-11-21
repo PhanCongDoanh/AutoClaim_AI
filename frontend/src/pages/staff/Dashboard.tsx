@@ -1,18 +1,14 @@
 import { AlertCircle, Car, CircleCheck, RotateCw, Search, SearchX, X } from 'lucide-react'
 import { useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { VehicleCard } from '@/components/vehicle/VehicleCard'
 import { VehicleGridSkeleton } from '@/components/vehicle/VehicleGridSkeleton'
 import { VehicleStatusTabs } from '@/components/vehicle/VehicleStatusTabs'
-import { useVehicleCounts } from '@/hooks/useVehicleCounts'
 import { useVehicles } from '@/hooks/useVehicles'
-import { saveBlob } from '@/lib/download'
-import { getErrorMessage } from '@/services/apiClient'
-import { inspectionService } from '@/services/inspectionService'
-import type { UUID, VehicleResponse, VehicleStatus } from '@/types'
+import type { VehicleResponse, VehicleStatus } from '@/types'
 import { RentedVehicleSheet } from './dashboard/RentedVehicleSheet'
 import type { DashboardLocationState } from './dashboardState'
 
@@ -28,6 +24,7 @@ type VehiclesResult = ReturnType<typeof useVehicles>
 export default function Dashboard() {
   const location = useLocation()
   const navigate = useNavigate()
+  void navigate
   const locationState = location.state as DashboardLocationState | null
   const checkedIn = locationState?.checkedIn
   const checkedOut = locationState?.checkedOut
@@ -36,6 +33,8 @@ export default function Dashboard() {
   )
   const [search, setSearch] = useState('')
   const [showNotice, setShowNotice] = useState(Boolean(checkedIn))
+  const [selectedVehicle, setSelectedVehicle] = useState<VehicleResponse | null>(null)
+  const selectedVehicleId = selectedVehicle?.vehicleId
 
   // One `useVehicles` per status (same hook / same API as before) so every filter pill can show its count.
   const available = useVehicles('AVAILABLE', search)
@@ -98,7 +97,13 @@ export default function Dashboard() {
         }
       >
         {(tabStatus) => (
-          <VehicleGrid {...vehiclesByStatus[tabStatus]} search={search} emptyMessage={EMPTY_MESSAGES[tabStatus]} />
+          <VehicleGrid
+            {...vehiclesByStatus[tabStatus]}
+            search={search}
+            emptyMessage={EMPTY_MESSAGES[tabStatus]}
+            selectedVehicleId={selectedVehicleId}
+            onSelectVehicle={setSelectedVehicle}
+          />
         )}
       </VehicleStatusTabs>
 
@@ -115,7 +120,16 @@ interface VehicleGridProps extends VehiclesResult {
   onSelectVehicle: (vehicle: VehicleResponse) => void
 }
 
-function VehicleGrid({ vehicles, isLoading, error, refetch, search, emptyMessage }: VehicleGridProps) {
+function VehicleGrid({
+  vehicles,
+  isLoading,
+  error,
+  refetch,
+  search,
+  emptyMessage,
+  selectedVehicleId,
+  onSelectVehicle,
+}: VehicleGridProps) {
   if (isLoading) return <VehicleGridSkeleton />
 
   if (error) {

@@ -2,6 +2,7 @@ import { Camera, Car, LogOut, Phone, User, Users } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { VehicleResponse } from '@/types'
 import { CarIllustration } from './CarIllustration'
 import { VehicleStatusBadge } from './VehicleStatusBadge'
@@ -25,15 +26,21 @@ interface VehicleCardProps {
 export const VEHICLE_CARD_ACTION_CLASS =
   'h-10 w-full rounded-xl bg-[#e4ecfc] text-[14px] font-semibold text-brand-700 hover:bg-[#d7e3fb] [&_svg]:size-[18px]'
 
-export function VehicleCard({ vehicle, menu, actions }: VehicleCardProps) {
+export function VehicleCard({ vehicle, menu, actions, onSelect, selected = false }: VehicleCardProps) {
   const { vehicleId, model, licensePlate, seats, status, avatarUrl } = vehicle
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const isRented = status === 'RENTED'
   const canSelect = isRented && Boolean(onSelect)
-  const dueState = getDueState(vehicle.expectedReturnAt)
 
   return (
-    <div className="group/card flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_4px_16px_-8px_rgba(15,23,42,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-16px_rgba(30,64,175,0.35)]">
+    <div
+      className={cn(
+        'group/card flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_4px_16px_-8px_rgba(15,23,42,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-16px_rgba(30,64,175,0.35)]',
+        canSelect && 'cursor-pointer',
+        selected && 'ring-2 ring-brand-500 ring-offset-2',
+      )}
+      onClick={canSelect ? () => onSelect?.(vehicle) : undefined}
+    >
       <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
         {avatarUrl && avatarUrl !== failedUrl ? (
           <img
@@ -96,12 +103,26 @@ export function VehicleCard({ vehicle, menu, actions }: VehicleCardProps) {
                 </Button>
               )}
               {status === 'RENTED' && vehicle.activeBookingId && (
-                <Button asChild variant="soft" className={VEHICLE_CARD_ACTION_CLASS}>
-                  <Link to={`/staff/check-out?bookingId=${vehicle.activeBookingId}`}>
+                onSelect ? (
+                  <Button
+                    variant="soft"
+                    className={VEHICLE_CARD_ACTION_CLASS}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onSelect(vehicle)
+                    }}
+                  >
                     <LogOut />
                     Check-out
-                  </Link>
-                </Button>
+                  </Button>
+                ) : (
+                  <Button asChild variant="soft" className={VEHICLE_CARD_ACTION_CLASS}>
+                    <Link to={`/staff/check-out?bookingId=${vehicle.activeBookingId}`}>
+                      <LogOut />
+                      Check-out
+                    </Link>
+                  </Button>
+                )
               )}
             </>
           )}

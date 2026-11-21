@@ -1,10 +1,15 @@
 import { Car, Check, User, Users } from 'lucide-react'
 import { Fragment } from 'react'
 import { cn } from '@/lib/utils'
-import type { VehicleResponse } from '@/types'
-import { CHECK_IN_CARD_CLASS } from './SectionCardHeader'
+import { CHECK_IN_CARD_CLASS } from '@/pages/staff/check-in/SectionCardHeader'
 
-const STEPS = ['Thông tin khách & CCCD', 'Chụp 8 góc xe'] as const
+/** Vehicle fields shown in the card; satisfied by `VehicleResponse`. */
+export interface VehicleSummary {
+  model: string
+  licensePlate: string
+  seats: number
+  avatarUrl: string | null
+}
 
 interface VehicleSummaryCardProps {
   vehicle: VehicleSummary
@@ -48,9 +53,17 @@ export function VehicleSummaryCard({
               {vehicle.licensePlate}
             </span>
           </div>
-          <p className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-600">
-            <Users className="h-3.5 w-3.5" />
-            {vehicle.seats} chỗ
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] font-medium text-slate-600">
+            <span className="inline-flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" />
+              {vehicle.seats} chỗ
+            </span>
+            {renterName && (
+              <span className="inline-flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5" />
+                {renterName}
+              </span>
+            )}
           </p>
         </div>
       </div>
