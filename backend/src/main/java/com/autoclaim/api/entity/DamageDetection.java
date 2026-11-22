@@ -29,7 +29,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = "image")
+@ToString(exclude = {"image", "overriddenBy"})
 public class DamageDetection {
 
     @Id
@@ -61,6 +61,14 @@ public class DamageDetection {
 
     @Column(name = "override_reason", length = 255)
     private String overrideReason;
+
+    /** Staff member who rejected this detection (null if not overridden, or overridden before V7). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "overridden_by")
+    private User overriddenBy;
+
+    @Column(name = "overridden_at")
+    private LocalDateTime overriddenAt;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
