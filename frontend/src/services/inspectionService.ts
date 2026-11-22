@@ -2,9 +2,12 @@ import type {
   AiProgress,
   CheckInRequest,
   CheckOutRequest,
+  InspectionHistoryItem,
+  InspectionHistoryQuery,
   InspectionResponse,
   MessageResponse,
   OverrideDamageRequest,
+  PageResponse,
   SessionResultResponse,
   UUID,
 } from '../types'
@@ -69,6 +72,20 @@ export const inspectionService = {
     const { data } = await axiosInstance.get<Blob>(`/inspections/${sessionId}/report`, {
       responseType: 'blob',
     })
+    return data
+  },
+
+  /** Returned rentals (`GET /inspections/history`), newest check-out first. */
+  async getHistory(query: InspectionHistoryQuery): Promise<PageResponse<InspectionHistoryItem>> {
+    const { data } = await axiosInstance.get<PageResponse<InspectionHistoryItem>>('/inspections/history', {
+      params: query,
+    })
+    return data
+  },
+
+  /** `YYYY-MM` months that have returned rentals, newest first. */
+  async getHistoryMonths(): Promise<string[]> {
+    const { data } = await axiosInstance.get<string[]>('/inspections/history/months')
     return data
   },
 

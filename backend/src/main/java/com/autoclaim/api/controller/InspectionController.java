@@ -4,8 +4,11 @@ import com.autoclaim.api.dto.request.CheckInRequest;
 import com.autoclaim.api.dto.request.CheckOutRequest;
 import com.autoclaim.api.dto.request.OverrideDamageRequest;
 import com.autoclaim.api.dto.response.AiProgressDto;
+import com.autoclaim.api.dto.response.InspectionHistoryItemDto;
 import com.autoclaim.api.dto.response.InspectionResponseDto;
+import com.autoclaim.api.dto.response.PageResponseDto;
 import com.autoclaim.api.dto.response.SessionResultResponseDto;
+import com.autoclaim.api.service.InspectionHistoryService;
 import com.autoclaim.api.service.InspectionService;
 import com.autoclaim.api.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,6 +47,7 @@ public class InspectionController {
 
     private final InspectionService inspectionService;
     private final ReportService reportService;
+    private final InspectionHistoryService inspectionHistoryService;
 
     @Operation(
             summary = "Vehicle Check-In",
@@ -100,6 +105,31 @@ public class InspectionController {
             @RequestPart("images") List<MultipartFile> images) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(inspectionService.checkOut(request, images));
+    }
+
+    @Operation(
+            summary = "Inspection history (returned rentals)",
+            description = "COMPLETED bookings with a CHECK_OUT session, newest check-out first. search: case- and accent-insensitive "
+                    + "match on license plate, model or renter name. result: ALL | DAMAGED | CLEAN (by damages not overridden). "
+                    + "month: YYYY-MM of the check-out (Vietnam time), blank = all. page from 0, size 1-50 (default 10)."
+    )
+    @GetMapping("/history")
+    public ResponseEntity<PageResponseDto<InspectionHistoryItemDto>> getHistory(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String result,
+            @RequestParam(required = false) String month,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ResponseEntity.ok(inspectionHistoryService.getHistory(search, result, month, page, size));
+    }
+
+    @Operation(
+            summary = "Months with returned rentals",
+            description = "YYYY-MM months that have at least one returned rental (check-out time), newest first."
+    )
+    @GetMapping("/history/months")
+    public ResponseEntity<List<String>> getHistoryMonths() {
+        return ResponseEntity.ok(inspectionHistoryService.getMonths());
     }
 
     @Operation(

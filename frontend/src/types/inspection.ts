@@ -46,6 +46,10 @@ export interface Damage {
   boundingBox: string
   isOverridden: boolean
   overrideReason: string | null
+  /** Staff who rejected the detection; null when not overridden or overridden before V7. */
+  overriddenByName: string | null
+  /** When it was rejected; null when not overridden or overridden before V7. */
+  overriddenAt: LocalDateTime | null
 }
 
 /** Mirrors `ImageResultDto`. `checkIn*` fields pair a check-out image with its check-in counterpart. */
@@ -76,7 +80,13 @@ export interface SessionResultResponse {
   vehicle: VehicleResponse
   renterName: string | null
   renterPhone: string | null
+  /** Staff who created this session (the check-out staff for a CHECK_OUT session). */
   staffName: string | null
+  /** Staff who created the booking's CHECK_IN session (handed the vehicle over). */
+  checkInStaffName: string | null
+  handoverNotes: string | null
+  /** Set when the vehicle came back from maintenance with notes. */
+  maintenanceNotes: string | null
   /** Sorted ANGLE_1..8 (CCCD_FRONT/BACK first for CHECK_IN); damages sorted by confidence, highest first. */
   images: ImageResult[]
 }

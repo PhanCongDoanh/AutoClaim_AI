@@ -70,12 +70,14 @@ interface MaintenanceRecordProps {
 
 function MaintenanceRecord({ vehicle, onStale }: MaintenanceRecordProps) {
   const navigate = useNavigate()
-  const results = useSessionResults(vehicle.lastCheckOutSessionId)
+  // null and undefined (field missing) both mean "no check-out data": never call /results then.
+  const checkOutSessionId = vehicle.lastCheckOutSessionId ?? null
+  const results = useSessionResults(checkOutSessionId)
   const [notes, setNotes] = useState(vehicle.maintenanceNotes ?? '')
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   // A completed rental exists exactly when the backend could date the maintenance.
-  const canSaveNotes = vehicle.maintenanceSince !== null
+  const canSaveNotes = vehicle.maintenanceSince != null
 
   async function handleConfirm() {
     setIsSubmitting(true)
@@ -105,7 +107,7 @@ function MaintenanceRecord({ vehicle, onStale }: MaintenanceRecordProps) {
       <VehicleHeaderCard vehicle={vehicle} />
 
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_minmax(300px,380px)]">
-        <MaintenanceDamageList hasSession={vehicle.lastCheckOutSessionId !== null} results={results} />
+        <MaintenanceDamageList hasSession={checkOutSessionId !== null} results={results} />
         <div className="space-y-6">
           {results.data && <MaintenanceReportCard session={results.data} />}
           <MaintenanceNotesCard value={notes} onChange={setNotes} disabled={isSubmitting} canSave={canSaveNotes} />

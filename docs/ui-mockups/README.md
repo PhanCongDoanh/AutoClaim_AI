@@ -1,4 +1,4 @@
-# Mockup UI – luồng Check-out & Bảo trì
+# Mockup UI – luồng Check-out, Bảo trì & Lịch sử
 
 Đặt ảnh thiết kế vào thư mục này với đúng tên dưới đây (Claude Code đọc theo tên):
 
@@ -16,5 +16,9 @@
 | 15_Bao-tri_Ho-so.png | Hồ sơ bảo trì – đợt 4 |
 | 16_Bao-tri_Xac-nhan-sua-xong.png | Xác nhận xe đã sửa xong – đợt 4 |
 | 17_Tab-San-sang_Xe-sua-xong.png | Tab Sẵn sàng sau khi sửa xong – đợt 4 |
+| S1_Lich-su-kiem-dinh_Staff.png | Lịch sử kiểm định – danh sách – đợt 6 |
+| S2_Lich-su_Loc-ket-qua.png | Lịch sử – dropdown lọc kết quả – đợt 6 |
+| S2b_Lich-su_Loc-thang.png | Lịch sử – dropdown lọc tháng (bỏ "Chọn tháng khác…") – đợt 6 |
+| S3_Chi-tiet-luot-thue.png | Chi tiết lượt thuê – đợt 6 (chuông thông báo vẫn ẩn; CCCD ẩn mặc định) |
 
 Dữ liệu trong mockup là dữ liệu mẫu – không hardcode (vd "Tróc sơn" ở màn 15 không phải lớp của model).
