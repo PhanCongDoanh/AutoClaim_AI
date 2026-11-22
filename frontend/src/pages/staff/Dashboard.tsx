@@ -1,14 +1,19 @@
-import { AlertCircle, Car, CircleCheck, RotateCw, Search, SearchX, X } from 'lucide-react'
-import { useState } from 'react'
+import { AlertCircle, Car, CircleCheck, FileDown, RotateCw, Search, SearchX, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { VehicleCard } from '@/components/vehicle/VehicleCard'
 import { VehicleGridSkeleton } from '@/components/vehicle/VehicleGridSkeleton'
 import { VehicleStatusTabs } from '@/components/vehicle/VehicleStatusTabs'
+import { useVehicleCounts } from '@/hooks/useVehicleCounts'
 import { useVehicles } from '@/hooks/useVehicles'
-import type { VehicleResponse, VehicleStatus } from '@/types'
+import { saveBlob } from '@/lib/download'
+import { getErrorMessage } from '@/services/apiClient'
+import { inspectionService } from '@/services/inspectionService'
+import type { UUID, VehicleResponse, VehicleStatus } from '@/types'
 import { RentedVehicleSheet } from './dashboard/RentedVehicleSheet'
 import type { DashboardLocationState } from './dashboardState'
 
@@ -18,41 +23,92 @@ const EMPTY_MESSAGES: Record<VehicleStatus, string> = {
   MAINTENANCE: 'Không có xe nào đang bảo trì.',
 }
 
-type VehiclesResult = ReturnType<typeof useVehicles>
+const PAGE_DESCRIPTIONS: Record<VehicleStatus, string> = {
+  AVAILABLE: 'Chọn xe khách muốn thuê để bắt đầu Check-in.',
+  RENTED: 'Chọn xe khách mang trả để Check-out và để AI so sánh hư hại.',
+  MAINTENANCE: 'Xe phát sinh hư hại sau khi trả. Bấm “Đã sửa xong” để đưa xe về Sẵn sàng.',
+}
+
+const CHECKED_OUT_DESTINATION: Partial<Record<VehicleStatus, string>> = {
+  AVAILABLE: 'đã về tab Sẵn sàng.',
+  MAINTENANCE: 'đã chuyển sang tab Bảo trì.',
+}
+
+async function redownloadReport(sessionId: UUID, fileName: string) {
+  try {
+    saveBlob(await inspectionService.downloadReport(sessionId), fileName)
+  } catch (err) {
+    toast.error('Không tải được biên bản PDF', { description: getErrorMessage(err) })
+  }
+}
+
+function getInitialStatus(state: DashboardLocationState | null): VehicleStatus {
+  if (state?.checkedOut) return state.checkedOut.vehicleStatus
+  if (state?.maintenanceCompleted) return 'AVAILABLE'
+  if (state?.checkedIn) return 'RENTED'
+  return state?.tab ?? 'AVAILABLE'
+}
 
 /** "Danh sách xe" tab (CarListTab). */
 export default function Dashboard() {
   const location = useLocation()
   const navigate = useNavigate()
-  void navigate
   const locationState = location.state as DashboardLocationState | null
   const checkedIn = locationState?.checkedIn
   const checkedOut = locationState?.checkedOut
-  const [status, setStatus] = useState<VehicleStatus>(
-    checkedOut?.vehicleStatus ?? (checkedIn ? 'RENTED' : 'AVAILABLE'),
-  )
+  const maintenanceCompleted = locationState?.maintenanceCompleted
+  const [status, setStatus] = useState<VehicleStatus>(() => getInitialStatus(locationState))
   const [search, setSearch] = useState('')
   const [showNotice, setShowNotice] = useState(Boolean(checkedIn))
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleResponse | null>(null)
-  const selectedVehicleId = selectedVehicle?.vehicleId
+  const { counts, refetch: refetchCounts } = useVehicleCounts()
 
-  // One `useVehicles` per status (same hook / same API as before) so every filter pill can show its count.
-  const available = useVehicles('AVAILABLE', search)
-  const rented = useVehicles('RENTED', search)
-  const maintenance = useVehicles('MAINTENANCE', search)
-  const vehiclesByStatus: Record<VehicleStatus, VehiclesResult> = {
-    AVAILABLE: available,
-    RENTED: rented,
-    MAINTENANCE: maintenance,
-  }
-  const counts: Partial<Record<VehicleStatus, number>> = {}
-  for (const [key, result] of Object.entries(vehiclesByStatus) as [VehicleStatus, VehiclesResult][]) {
-    if (!result.isLoading && !result.error) counts[key] = result.vehicles.length
+  // Mockups 10 / 14: toast once after a completed check-out, then drop the state so F5 / Back don't repeat it.
+  useEffect(() => {
+    if (!checkedOut) return
+    const description = `${checkedOut.model} · ${checkedOut.licensePlate} ${
+      CHECKED_OUT_DESTINATION[checkedOut.vehicleStatus] ?? 'đã cập nhật trạng thái.'
+    }`
+    const { reportFileName, sessionId } = checkedOut
+    if (reportFileName) {
+      // Mockup 14: report produced, vehicle moved to maintenance.
+      toast('Đã xuất biên bản PDF', {
+        id: `checked-out-${sessionId}`,
+        icon: <FileDown className="h-4 w-4 text-red-600" />,
+        description,
+        duration: 10_000,
+        action: { label: 'Tải lại PDF', onClick: () => void redownloadReport(sessionId, reportFileName) },
+      })
+    } else {
+      toast.success('Trả xe hoàn tất', { id: `checked-out-${sessionId}`, description })
+    }
+    navigate(location.pathname, { replace: true, state: null })
+  }, [checkedOut, navigate, location.pathname])
+
+  // Mockup 17: toast once after "Đã sửa xong", then drop the state.
+  useEffect(() => {
+    if (!maintenanceCompleted) return
+    const { model, licensePlate, notesSaved } = maintenanceCompleted
+    const id = `maintenance-done-${licensePlate}`
+    if (notesSaved === false) {
+      toast.success('Đã đưa xe về Sẵn sàng (không có lượt thuê để lưu ghi chú)', {
+        id,
+        description: `${model} · ${licensePlate}`,
+      })
+    } else {
+      toast.success('Xe đã sẵn sàng cho thuê', { id, description: `${model} · ${licensePlate} đã về tab Sẵn sàng.` })
+    }
+    navigate(location.pathname, { replace: true, state: null })
+  }, [maintenanceCompleted, navigate, location.pathname])
+
+  function handleTabChange(next: VehicleStatus) {
+    setStatus(next)
+    refetchCounts()
   }
 
   return (
     <section className="space-y-7">
-      <PageHeader icon={Car} title="Danh sách xe" description="Chọn xe khách muốn thuê để bắt đầu Check-in." />
+      <PageHeader icon={Car} title="Danh sách xe" description={PAGE_DESCRIPTIONS[status]} />
 
       {showNotice && checkedIn && (
         <div
@@ -80,7 +136,7 @@ export default function Dashboard() {
 
       <VehicleStatusTabs
         value={status}
-        onValueChange={setStatus}
+        onValueChange={handleTabChange}
         counts={counts}
         toolbar={
           <div className="relative w-full sm:w-[340px] xl:w-[360px]">
@@ -98,10 +154,10 @@ export default function Dashboard() {
       >
         {(tabStatus) => (
           <VehicleGrid
-            {...vehiclesByStatus[tabStatus]}
+            status={tabStatus}
             search={search}
             emptyMessage={EMPTY_MESSAGES[tabStatus]}
-            selectedVehicleId={selectedVehicleId}
+            selectedVehicleId={selectedVehicle?.vehicleId}
             onSelectVehicle={setSelectedVehicle}
           />
         )}
@@ -112,7 +168,8 @@ export default function Dashboard() {
   )
 }
 
-interface VehicleGridProps extends VehiclesResult {
+interface VehicleGridProps {
+  status: VehicleStatus
   search: string
   emptyMessage: string
   selectedVehicleId?: string
@@ -120,16 +177,10 @@ interface VehicleGridProps extends VehiclesResult {
   onSelectVehicle: (vehicle: VehicleResponse) => void
 }
 
-function VehicleGrid({
-  vehicles,
-  isLoading,
-  error,
-  refetch,
-  search,
-  emptyMessage,
-  selectedVehicleId,
-  onSelectVehicle,
-}: VehicleGridProps) {
+/** Radix only mounts the active tab, so each grid fetches when its tab is opened. */
+function VehicleGrid({ status, search, emptyMessage, selectedVehicleId, onSelectVehicle }: VehicleGridProps) {
+  const { vehicles, isLoading, error, refetch } = useVehicles(status, search)
+
   if (isLoading) return <VehicleGridSkeleton />
 
   if (error) {

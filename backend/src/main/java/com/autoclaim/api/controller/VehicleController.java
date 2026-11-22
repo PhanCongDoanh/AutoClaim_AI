@@ -28,7 +28,7 @@ public class VehicleController {
 
     private final VehicleService vehicleService;
 
-    @Operation(summary = "List vehicles by status", description = "Returns non-deleted vehicles filtered by status. Includes active booking, renter, and check-in session details when status is RENTED.")
+    @Operation(summary = "List vehicles by status", description = "Returns non-deleted vehicles filtered by status. Includes active booking, renter, and check-in session details when status is RENTED, and the last check-out session, maintenance start, renter, damage count/summary and notes when status is MAINTENANCE.")
     @GetMapping
     public ResponseEntity<List<VehicleResponseDto>> getVehicles(
             @RequestParam VehicleStatus status,
@@ -42,7 +42,7 @@ public class VehicleController {
         return ResponseEntity.ok(vehicleService.countByStatus());
     }
 
-    @Operation(summary = "Complete vehicle maintenance", description = "Updates vehicle status from MAINTENANCE to AVAILABLE and optionally records maintenanceNotes on the latest booking.")
+    @Operation(summary = "Complete vehicle maintenance", description = "MAINTENANCE → AVAILABLE. maintenanceNotes (max 1000 chars, else 400) are stored on the latest COMPLETED booking; without one the vehicle is still released and notesSaved=false. 409 when the vehicle is not under maintenance.")
     @PatchMapping("/{id}/complete-maintenance")
     public ResponseEntity<VehicleResponseDto> completeMaintenance(
             @PathVariable UUID id,
