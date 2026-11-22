@@ -33,6 +33,12 @@ public record SessionResultResponseDto(
         String renterPhone,
         /** Staff member who created this session. */
         String staffName,
+        /** Staff member who created the CHECK_IN session of the booking (handed the vehicle over). */
+        String checkInStaffName,
+        /** {@code bookings.handover_notes}; may be null. */
+        String handoverNotes,
+        /** {@code bookings.maintenance_notes} (set when the vehicle came back from maintenance); may be null. */
+        String maintenanceNotes,
         List<ImageResultDto> images
 ) {
 }
