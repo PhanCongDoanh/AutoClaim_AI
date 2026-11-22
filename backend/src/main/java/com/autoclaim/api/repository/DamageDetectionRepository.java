@@ -1,6 +1,7 @@
 package com.autoclaim.api.repository;
 
 import com.autoclaim.api.entity.DamageDetection;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +14,8 @@ import java.util.UUID;
 @Repository
 public interface DamageDetectionRepository extends JpaRepository<DamageDetection, UUID> {
 
+    /** All detections of a session; image and overriding staff are fetched (no N+1 when mapping to DamageDto). */
+    @EntityGraph(attributePaths = {"image", "overriddenBy"})
     List<DamageDetection> findByImage_Session_SessionId(UUID sessionId);
 
     List<DamageDetection> findByImage_ImageId(UUID imageId);
