@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +20,19 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findFirstByVehicle_VehicleIdAndStatusOrderByCreatedAtDesc(UUID vehicleId, BookingStatus status);
 
     Optional<Booking> findFirstByVehicle_VehicleIdOrderByCreatedAtDesc(UUID vehicleId);
+
+    /**
+     * Latest booking with the given status of each listed vehicle (renter fetched), in one query. A vehicle with
+     * two such bookings created at the exact same instant may appear twice; callers keep the first.
+     */
+    @Query("""
+            select b from Booking b join fetch b.renter
+            where b.vehicle.vehicleId in :vehicleIds and b.status = :status
+              and b.createdAt = (select max(b2.createdAt) from Booking b2
+                                 where b2.vehicle = b.vehicle and b2.status = :status)
+            """)
+    List<Booking> findLatestByVehicleIdsAndStatus(@Param("vehicleIds") Collection<UUID> vehicleIds,
+                                                  @Param("status") BookingStatus status);
 
     /**
      * Loads a booking with a row lock (SELECT ... FOR UPDATE) so concurrent check-out / complete requests

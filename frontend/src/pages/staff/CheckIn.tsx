@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Car, Check, CircleCheck, Loader2, Lock, LogIn, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleCheck, Loader2, Lock, LogIn, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PAGE_PRIMARY_ACTION_CLASS, PageHeader } from '@/components/layout/PageHeader'
@@ -26,9 +26,6 @@ import {
   type RenterFormErrors,
   type RenterFormValues,
 } from './check-in/renterForm'
-import { CHECK_IN_CARD_CLASS } from './check-in/SectionCardHeader'
-import { VehicleAnglesStep } from './check-in/VehicleAnglesStep'
-import { VehicleSummaryCard } from './check-in/VehicleSummaryCard'
 import type { DashboardLocationState } from './dashboardState'
 
 const CHECK_IN_STEPS = ['Thông tin khách & CCCD', 'Chụp 8 góc xe'] as const
@@ -212,27 +209,5 @@ function ProgressTag({ done, total, label }: { done: number; total: number; labe
       <CircleCheck className="h-[18px] w-[18px]" />
       {done}/{total} {label}
     </span>
-  )
-}
-
-/** Empty state of the Check-in tab when no (available) vehicle is selected. */
-function VehicleNotReady({ state }: { state: 'missing' | 'loading' | 'unavailable' }) {
-  return (
-    <div className={cn(CHECK_IN_CARD_CLASS, 'flex items-center gap-4 px-6 py-5')}>
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#e9f0fd] text-brand-600">
-        {state === 'loading' ? <Loader2 className="h-6 w-6 animate-spin" /> : <Car className="h-6 w-6" />}
-      </span>
-      {state === 'loading' ? (
-        <p className="text-[15px] text-slate-600">Đang tải thông tin xe…</p>
-      ) : (
-        <p className="text-[15px] text-slate-700">
-          {state === 'missing' ? 'Chưa chọn xe. ' : 'Xe này không còn sẵn sàng cho thuê. '}
-          <Link to="/staff" className="font-semibold text-brand-600 hover:underline">
-            Chọn một xe đang sẵn sàng
-          </Link>{' '}
-          từ danh sách.
-        </p>
-      )}
-    </div>
   )
 }

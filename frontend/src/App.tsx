@@ -9,6 +9,7 @@ import VehicleManagement from './pages/admin/VehicleManagement'
 import CheckIn from './pages/staff/CheckIn'
 import CheckOut from './pages/staff/CheckOut'
 import Dashboard from './pages/staff/Dashboard'
+import Maintenance from './pages/staff/Maintenance'
 
 function NotFound() {
   return (
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
           { index: true, element: <Dashboard /> },
           { path: 'check-in', element: <CheckIn /> },
           { path: 'check-out', element: <CheckOut /> },
+          { path: 'maintenance/:vehicleId', element: <Maintenance /> },
           { path: '*', element: <NotFound /> },
         ],
       },

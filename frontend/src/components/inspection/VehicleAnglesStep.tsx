@@ -1,12 +1,12 @@
-import { CircleCheck } from 'lucide-react'
+import { CircleCheck, Lock } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AngleDiagram } from '@/components/inspection/AngleDiagram'
 import { PhotoCaptureBox } from '@/components/inspection/PhotoCaptureBox'
 import { ANGLE_LABELS, VEHICLE_PHOTO_KEYS } from '@/components/inspection/photoAngles'
 import { isSlotReady, type PhotoSlot } from '@/hooks/usePhotoCapture'
 import { cn } from '@/lib/utils'
+import { CHECK_IN_CARD_CLASS } from '@/pages/staff/check-in/SectionCardHeader'
 import type { AngleCode } from '@/types'
-import { CHECK_IN_CARD_CLASS } from './SectionCardHeader'
 
 interface VehicleAnglesStepProps {
   getSlot: (key: AngleCode) => PhotoSlot
@@ -41,20 +41,23 @@ export function VehicleAnglesStep({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[250px_1fr]">
-      <div className={cn(CHECK_IN_CARD_CLASS, 'h-fit lg:sticky lg:top-24')}>
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="text-[16px] font-bold text-slate-900">Sơ đồ góc chụp</h2>
-          <p className="mt-0.5 text-[13px] leading-snug text-slate-500">Đi vòng quanh xe theo chiều kim đồng hồ</p>
+      <div className="space-y-4 lg:sticky lg:top-24 lg:h-fit">
+        <div className={cn(CHECK_IN_CARD_CLASS, 'h-fit')}>
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h2 className="text-[16px] font-bold text-slate-900">Sơ đồ góc chụp</h2>
+            <p className="mt-0.5 text-[13px] leading-snug text-slate-500">Đi vòng quanh xe theo chiều kim đồng hồ</p>
+          </div>
+          <div className="px-5 pb-5 pt-4">
+            <AngleDiagram isCaptured={isCaptured} currentKey={nextKey} />
+          </div>
         </div>
-        <div className="px-5 pb-5 pt-4">
-          <AngleDiagram isCaptured={isCaptured} currentKey={nextKey} />
-        </div>
+        {aside}
       </div>
 
       <div className={cn(CHECK_IN_CARD_CLASS, 'space-y-4 p-4 sm:p-5')}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-1 items-center gap-4">
-            <h2 className="text-[16px] font-bold text-slate-900">Ảnh ngoại thất</h2>
+            <h2 className="text-[16px] font-bold text-slate-900">{title}</h2>
             <div
               className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-100 sm:w-44"
               role="progressbar"
@@ -95,13 +98,15 @@ export function VehicleAnglesStep({
           ))}
         </div>
 
-        <div className="flex items-start gap-3 rounded-xl border border-blue-200/80 bg-[#eef4ff] px-4 py-3 text-[14px] text-slate-700">
-          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
-          <p>
-            Khi bấm <strong className="text-slate-900">Xác nhận cho thuê</strong>, 8 ảnh được lưu làm ảnh gốc của
-            phiên thuê và xe tự động chuyển sang <strong className="text-slate-900">Đang thuê</strong>.
-          </p>
-        </div>
+        {note ?? (
+          <div className="flex items-start gap-3 rounded-xl border border-blue-200/80 bg-[#eef4ff] px-4 py-3 text-[14px] text-slate-700">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+            <p>
+              Khi bấm <strong className="text-slate-900">Xác nhận cho thuê</strong>, 8 ảnh được lưu làm ảnh gốc của
+              phiên thuê và xe tự động chuyển sang <strong className="text-slate-900">Đang thuê</strong>.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

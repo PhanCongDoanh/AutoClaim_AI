@@ -1,16 +1,4 @@
-import {
-  Bell,
-  Car,
-  ChevronDown,
-  History,
-  LogIn,
-  LogOut,
-  Menu,
-  ShieldCheck,
-  Users,
-  X,
-  type LucideIcon,
-} from 'lucide-react'
+import { Car, ChevronDown, LogOut, Menu, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import {
@@ -40,9 +28,6 @@ const NAV_ITEMS_BY_ROLE: Record<Role, NavItem[]> = {
   STAFF: [
     // Check-in / check-out are started from a vehicle card, so they are not menu entries.
     { to: '/staff', label: 'Danh sách xe', icon: Car, end: true },
-    { to: '/staff/check-in', label: 'Check-in', icon: LogIn },
-    { to: '/staff/check-out', label: 'Check-out', icon: LogOut },
-    { to: '/staff/history', label: 'Lịch sử kiểm định', icon: History, disabled: true },
   ],
   ADMIN: [
     { to: '/admin/vehicles', label: 'Quản lý xe', icon: Car },
@@ -133,14 +118,7 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
-          <button
-            type="button"
-            className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.25)] ring-1 ring-slate-100 transition-colors hover:bg-slate-50"
-            aria-label="Thông báo"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
-          </button>
+          {/* Notification bell hidden until notifications exist. */}
 
           {user && (
             <DropdownMenu>
