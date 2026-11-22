@@ -9,6 +9,8 @@ import VehicleManagement from './pages/admin/VehicleManagement'
 import CheckIn from './pages/staff/CheckIn'
 import CheckOut from './pages/staff/CheckOut'
 import Dashboard from './pages/staff/Dashboard'
+import History from './pages/staff/History'
+import HistoryDetail from './pages/staff/HistoryDetail'
 import Maintenance from './pages/staff/Maintenance'
 
 function NotFound() {
@@ -37,6 +39,8 @@ const router = createBrowserRouter([
           { path: 'check-in', element: <CheckIn /> },
           { path: 'check-out', element: <CheckOut /> },
           { path: 'maintenance/:vehicleId', element: <Maintenance /> },
+          { path: 'history', element: <History /> },
+          { path: 'history/:checkOutSessionId', element: <HistoryDetail /> },
           { path: '*', element: <NotFound /> },
         ],
       },
