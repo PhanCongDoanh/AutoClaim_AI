@@ -281,6 +281,11 @@ public class InspectionServiceImpl implements InspectionService {
                 .renterName(renter != null ? renter.getName() : null)
                 .renterPhone(renter != null ? renter.getPhoneNumber() : null)
                 .staffName(session.getStaff() != null ? session.getStaff().getName() : null)
+                .checkInStaffName(checkInSession != null && checkInSession.getStaff() != null
+                        ? checkInSession.getStaff().getName()
+                        : null)
+                .handoverNotes(booking.getHandoverNotes())
+                .maintenanceNotes(booking.getMaintenanceNotes())
                 .images(imageResults)
                 .build();
     }
@@ -373,6 +378,8 @@ public class InspectionServiceImpl implements InspectionService {
         if (!Boolean.TRUE.equals(detection.getIsOverridden())) {
             detection.setIsOverridden(true);
             detection.setOverrideReason(request.overrideReason().trim());
+            detection.setOverriddenBy(resolveCurrentStaff());
+            detection.setOverriddenAt(LocalDateTime.now());
             damageDetectionRepository.saveAndFlush(detection);
         }
 
