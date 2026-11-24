@@ -1,4 +1,5 @@
 import type { LocalDateTime, UUID } from './common'
+import type { RoleName } from './enums'
 
 /** `result` filter of `GET /api/inspections/history` (by damages not rejected by staff). */
 export type HistoryResultFilter = 'ALL' | 'DAMAGED' | 'CLEAN'
@@ -15,6 +16,10 @@ export interface InspectionHistoryItem {
   /** Null if the booking has no check-in session. */
   checkInAt: LocalDateTime | null
   checkOutAt: LocalDateTime
+  /** Staff of the check-out session (who reviewed the AI result). */
+  checkOutStaffName: string | null
+  /** Staff of the check-in session; null if there is none. */
+  checkInStaffName: string | null
   /** Damages not rejected by staff. */
   damageCount: number
   /** Detections rejected by staff as AI mistakes. */
@@ -39,4 +44,36 @@ export interface InspectionHistoryQuery {
   month?: string
   page?: number
   size?: number
+}
+
+/** Query params of `GET /api/admin/inspections/history`: the staff query plus the monitoring filters. */
+export interface AdminInspectionHistoryQuery extends InspectionHistoryQuery {
+  /** Staff of the check-out session. */
+  staffId?: UUID
+  /** true = only returns with at least one AI detection rejected by staff. */
+  hasOverride?: boolean
+}
+
+/** Query params of `GET /api/admin/inspections/history/summary` (result / override filters do not apply). */
+export type InspectionHistorySummaryQuery = Pick<AdminInspectionHistoryQuery, 'search' | 'month' | 'staffId'>
+
+/** Mirrors `InspectionHistorySummaryDto`. */
+export interface InspectionHistorySummary {
+  totalReturns: number
+  damagedReturns: number
+  cleanReturns: number
+  /** Every AI detection, including the ones rejected by staff. */
+  aiDetections: number
+  overriddenDetections: number
+  /** `overriddenDetections / aiDetections` (0..1), 0 when there is no detection. */
+  overrideRate: number
+}
+
+/** Mirrors `HistoryStaffOptionDto`: a user who ran at least one check-out. */
+export interface HistoryStaffOption {
+  userId: UUID
+  fullName: string
+  /** Soft-deleted ("đã nghỉ"). */
+  deleted: boolean
+  roleName: RoleName | null
 }

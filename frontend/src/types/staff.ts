@@ -1,10 +1,10 @@
 import type { LocalDateTime, UUID } from './common'
 import type { RoleName } from './enums'
 
-/** Mirrors `StaffResponseDto`. */
+/** Mirrors `StaffResponseDto`. The display name is `name`, matching the JSON field. */
 export interface StaffResponse {
   userId: UUID
-  fullName: string
+  name: string
   email: string
   phone: string | null
   roleName: RoleName | null
@@ -14,7 +14,7 @@ export interface StaffResponse {
 
 /** Mirrors `CreateStaffRequest`. `roleName` defaults to STAFF on the backend. */
 export interface CreateStaffRequest {
-  fullName: string
+  name: string
   email: string
   phone?: string
   /** 6-72 characters; stored BCrypt-hashed. */
@@ -24,7 +24,7 @@ export interface CreateStaffRequest {
 
 /** Mirrors `UpdateStaffRequest`. Email and password can't be changed through this endpoint. */
 export interface UpdateStaffRequest {
-  fullName: string
+  name: string
   phone?: string
   roleName?: RoleName
 }
