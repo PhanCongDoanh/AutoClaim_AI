@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { getActiveDamages } from '@/lib/damage'
 import type { AngleCode, SessionResultResponse, UUID } from '@/types'
-import { DamageViewer, type ViewMode } from '../check-out/damage-review/DamageViewer'
+import { DamageViewer, type ViewMode } from '@/pages/staff/check-out/damage-review/DamageViewer'
 
 interface AnglePairDialogProps {
   session: SessionResultResponse

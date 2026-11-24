@@ -19,6 +19,10 @@ public record InspectionHistoryItemDto(
         LocalDateTime checkInAt,
         /** created_at of the CHECK_OUT session. */
         LocalDateTime checkOutAt,
+        /** Staff of the CHECK_OUT session (who reviewed the AI result). */
+        String checkOutStaffName,
+        /** Staff of the latest CHECK_IN session; null if the booking has none. */
+        String checkInStaffName,
         /** Damages not rejected by staff (final result after review). */
         int damageCount,
         /** Detections rejected by staff as AI mistakes. */

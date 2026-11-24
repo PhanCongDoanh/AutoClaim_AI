@@ -1,11 +1,16 @@
-import { CalendarClock, Search, Sparkles } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { CalendarClock, Search, Sparkles, UserRound } from 'lucide-react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { HistoryResultFilter } from '@/types'
+import type { HistoryStaffOption, HistoryResultFilter, UUID } from '@/types'
 import { ALL_MONTHS, formatMonth } from './historyQuery'
 
 const SEARCH_DEBOUNCE_MS = 300
+
+/** Value of "Nhân viên: Tất cả" in the select (Radix Select does not allow an empty value). */
+const ALL_STAFF = 'all'
 
 const RESULT_OPTIONS: { value: HistoryResultFilter; label: string }[] = [
   { value: 'ALL', label: 'Tất cả' },
@@ -22,6 +27,18 @@ interface HistoryFiltersBarProps {
   month: string | null
   months: string[]
   onMonthChange: (month: string) => void
+  /** Second row of filters (admin page: `AdminFiltersRow`). */
+  extraRow?: ReactNode
+}
+
+export interface AdminHistoryFiltersProps {
+  staffId: UUID | null
+  staffOptions: HistoryStaffOption[]
+  /** True while the staff list loads. */
+  staffLoading: boolean
+  onStaffChange: (staffId: UUID | null) => void
+  overrideOnly: boolean
+  onOverrideOnlyChange: (overrideOnly: boolean) => void
 }
 
 /** Search (debounced) · result filter · month filter (mockups S1 / S2 / S2b). */
@@ -33,6 +50,7 @@ export function HistoryFiltersBar({
   month,
   months,
   onMonthChange,
+  extraRow,
 }: HistoryFiltersBarProps) {
   const [draft, setDraft] = useState(search)
   const onSearchChangeRef = useRef(onSearchChange)
@@ -49,7 +67,7 @@ export function HistoryFiltersBar({
   // A chosen month that has no data any more still needs an option to show.
   const monthOptions = month && month !== ALL_MONTHS && !months.includes(month) ? [month, ...months] : months
 
-  return (
+  const filtersRow = (
     <div className="flex flex-col gap-3 lg:flex-row">
       <div className="relative flex-1">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-500" />
@@ -97,6 +115,72 @@ export function HistoryFiltersBar({
             ))}
           </SelectContent>
         </Select>
+      </div>
+    </div>
+  )
+
+  if (!extraRow) return filtersRow
+  return (
+    <div className="space-y-3">
+      {filtersRow}
+      {extraRow}
+    </div>
+  )
+}
+
+function getStaffLabel(option: HistoryStaffOption): string {
+  const tags = [option.deleted && 'đã nghỉ', option.roleName === 'ADMIN' && 'Admin'].filter(Boolean)
+  return tags.length > 0 ? `${option.fullName} (${tags.join(', ')})` : option.fullName
+}
+
+/** "Nhân viên: Tất cả / <tên>" (staff who reviewed the return) · "Chỉ lượt có lỗi AI bị loại". */
+export function AdminFiltersRow({
+  staffId,
+  staffOptions,
+  staffLoading,
+  onStaffChange,
+  overrideOnly,
+  onOverrideOnlyChange,
+}: AdminHistoryFiltersProps) {
+  const checkboxId = useId()
+  // A staff id from the URL that is not in the list (e.g. never ran a check-out) still needs an option.
+  const hasUnknownStaff = staffId !== null && !staffLoading && !staffOptions.some((o) => o.userId === staffId)
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+      <Select
+        value={staffId ?? ALL_STAFF}
+        onValueChange={(value) => onStaffChange(value === ALL_STAFF ? null : value)}
+        disabled={staffLoading}
+      >
+        <SelectTrigger className="h-11 sm:w-80" aria-label="Lọc theo nhân viên nhận lại xe">
+          <span className="flex min-w-0 items-center gap-2">
+            <UserRound className="h-4 w-4 shrink-0 text-slate-500" />
+            <span className="truncate">
+              Nhân viên: <SelectValue placeholder="Đang tải…" />
+            </span>
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL_STAFF}>Tất cả</SelectItem>
+          {hasUnknownStaff && <SelectItem value={staffId}>Không rõ</SelectItem>}
+          {staffOptions.map((option) => (
+            <SelectItem key={option.userId} value={option.userId}>
+              {getStaffLabel(option)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <div className="flex items-center gap-2.5">
+        <Checkbox
+          id={checkboxId}
+          checked={overrideOnly}
+          onCheckedChange={(checked) => onOverrideOnlyChange(checked === true)}
+        />
+        <Label htmlFor={checkboxId} className="cursor-pointer text-sm font-medium text-slate-700">
+          Chỉ lượt có lỗi AI bị loại
+        </Label>
       </div>
     </div>
   )
