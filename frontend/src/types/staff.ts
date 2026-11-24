@@ -17,7 +17,7 @@ export interface CreateStaffRequest {
   fullName: string
   email: string
   phone?: string
-  /** 6-72 characters; stored BCrypt-hashed. */
+  /** 6-12 characters satisfying `PasswordPolicy`; stored BCrypt-hashed. */
   password: string
   roleName?: RoleName
 }
