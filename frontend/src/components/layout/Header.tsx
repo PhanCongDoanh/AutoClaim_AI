@@ -33,6 +33,7 @@ const NAV_ITEMS_BY_ROLE: Record<Role, NavItem[]> = {
   ADMIN: [
     { to: '/admin/vehicles', label: 'Quản lý xe', icon: Car },
     { to: '/admin/staff', label: 'Nhân viên', icon: Users },
+    { to: '/admin/history', label: 'Lịch sử kiểm định', icon: History },
   ],
 }
 
