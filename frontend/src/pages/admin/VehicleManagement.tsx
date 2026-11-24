@@ -1,10 +1,8 @@
 import {
   AlertCircle,
-  Camera,
   Car,
   History,
   Loader2,
-  LogOut,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -30,7 +28,6 @@ import { VehicleGridSkeleton } from '@/components/vehicle/VehicleGridSkeleton'
 import { VehicleStatusTabs } from '@/components/vehicle/VehicleStatusTabs'
 import { VEHICLE_STATUS_META } from '@/components/vehicle/vehicleStatus'
 import { useAdminVehicles } from '@/hooks/useAdminVehicles'
-import { cn } from '@/lib/utils'
 import { getErrorMessage } from '@/services/apiClient'
 import { vehicleService } from '@/services/vehicleService'
 import type { UUID, VehicleResponse, VehicleStatus } from '@/types'
@@ -162,11 +159,17 @@ export default function VehicleManagement() {
               />
             }
             actions={
-              <AdminCardAction
-                vehicle={vehicle}
-                isCompleting={completingId === vehicle.vehicleId}
-                onCompleteMaintenance={handleCompleteMaintenance}
-              />
+              vehicle.status === 'MAINTENANCE' ? (
+                <Button
+                  variant="soft"
+                  className={VEHICLE_CARD_ACTION_CLASS}
+                  disabled={completingId === vehicle.vehicleId}
+                  onClick={() => handleCompleteMaintenance(vehicle)}
+                >
+                  {completingId === vehicle.vehicleId ? <Loader2 className="animate-spin" /> : <Wrench />}
+                  Hoàn tất bảo trì
+                </Button>
+              ) : null
             }
           />
         ))}
@@ -275,42 +278,5 @@ function VehicleActionsMenu({ vehicle, onEdit, onDelete }: VehicleActionsMenuPro
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-interface AdminCardActionProps {
-  vehicle: VehicleResponse
-  isCompleting: boolean
-  onCompleteMaintenance: (vehicle: VehicleResponse) => void
-}
-
-function AdminCardAction({ vehicle, isCompleting, onCompleteMaintenance }: AdminCardActionProps) {
-  if (vehicle.status === 'MAINTENANCE') {
-    return (
-      <Button
-        variant="soft"
-        className={VEHICLE_CARD_ACTION_CLASS}
-        disabled={isCompleting}
-        onClick={() => onCompleteMaintenance(vehicle)}
-      >
-        {isCompleting ? <Loader2 className="animate-spin" /> : <Wrench />}
-        Hoàn tất bảo trì
-      </Button>
-    )
-  }
-
-  // Check-in/out runs on /staff routes, which ProtectedRoute limits to STAFF accounts.
-  // Kept full-colour (and hoverable for the tooltip) to match the design; clicks are still blocked by `disabled`.
-  const isAvailable = vehicle.status === 'AVAILABLE'
-  return (
-    <Button
-      variant="soft"
-      className={cn(VEHICLE_CARD_ACTION_CLASS, 'disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-100')}
-      disabled
-      title="Chỉ tài khoản Nhân viên thực hiện check-in / check-out"
-    >
-      {isAvailable ? <Camera /> : <LogOut />}
-      {isAvailable ? 'Chọn xe · Check-in' : 'Check-out'}
-    </Button>
   )
 }

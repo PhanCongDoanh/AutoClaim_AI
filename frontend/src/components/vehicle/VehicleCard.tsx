@@ -12,7 +12,7 @@ interface VehicleCardProps {
   vehicle: VehicleResponse
   /** Rendered in the top-right corner of the image (e.g. an actions dropdown). */
   menu?: ReactNode
-  /** Replaces the default staff actions (check-in link / check-out button) in the footer. */
+  /** Replaces the default staff actions in the footer. Pass null to hide the footer. */
   actions?: ReactNode
   /**
    * Rented vehicles: clicking the card or its "Check-out" button calls this (e.g. to open a details
@@ -121,55 +121,57 @@ export function VehicleCard({ vehicle, menu, actions, onSelect, selected = false
           </p>
         )}
 
-        <div className="mt-auto">
-          {actions ?? (
-            <>
-              {status === 'AVAILABLE' && (
-                <Button asChild variant="soft" className={VEHICLE_CARD_ACTION_CLASS}>
-                  {/* Selecting a car = navigating to the Check-in tab with its id; CheckIn reads `vehicleId`. */}
-                  <Link to={`/staff/check-in?vehicleId=${vehicleId}`}>
-                    <Camera />
-                    Chọn xe · Check-in
-                  </Link>
-                </Button>
-              )}
-              {status === 'RENTED' && vehicle.activeBookingId && (
-                onSelect ? (
-                  <Button
-                    variant="soft"
-                    className={VEHICLE_CARD_ACTION_CLASS}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onSelect(vehicle)
-                    }}
-                  >
-                    <LogOut />
-                    Nhận lại xe · Check-out
-                  </Button>
-                ) : (
+        {actions !== null && (
+          <div className="mt-auto">
+            {actions ?? (
+              <>
+                {status === 'AVAILABLE' && (
                   <Button asChild variant="soft" className={VEHICLE_CARD_ACTION_CLASS}>
-                    <Link to={`/staff/check-out?bookingId=${vehicle.activeBookingId}`}>
-                      <LogOut />
-                      Nhận lại xe · Check-out
+                    {/* Selecting a car = navigating to the Check-in tab with its id; CheckIn reads `vehicleId`. */}
+                    <Link to={`/staff/check-in?vehicleId=${vehicleId}`}>
+                      <Camera />
+                      Chọn xe · Check-in
                     </Link>
                   </Button>
-                )
-              )}
-              {status === 'MAINTENANCE' && (
-                <Button
-                  asChild
-                  variant="secondary"
-                  className={cn(VEHICLE_CARD_ACTION_CLASS, 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50')}
-                >
-                  <Link to={`/staff/maintenance/${vehicleId}`}>
-                    <Wrench />
-                    Xem bảo trì
-                  </Link>
-                </Button>
-              )}
-            </>
-          )}
-        </div>
+                )}
+                {status === 'RENTED' && vehicle.activeBookingId && (
+                  onSelect ? (
+                    <Button
+                      variant="soft"
+                      className={VEHICLE_CARD_ACTION_CLASS}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onSelect(vehicle)
+                      }}
+                    >
+                      <LogOut />
+                      Nhận lại xe · Check-out
+                    </Button>
+                  ) : (
+                    <Button asChild variant="soft" className={VEHICLE_CARD_ACTION_CLASS}>
+                      <Link to={`/staff/check-out?bookingId=${vehicle.activeBookingId}`}>
+                        <LogOut />
+                        Nhận lại xe · Check-out
+                      </Link>
+                    </Button>
+                  )
+                )}
+                {status === 'MAINTENANCE' && (
+                  <Button
+                    asChild
+                    variant="secondary"
+                    className={cn(VEHICLE_CARD_ACTION_CLASS, 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50')}
+                  >
+                    <Link to={`/staff/maintenance/${vehicleId}`}>
+                      <Wrench />
+                      Xem bảo trì
+                    </Link>
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
