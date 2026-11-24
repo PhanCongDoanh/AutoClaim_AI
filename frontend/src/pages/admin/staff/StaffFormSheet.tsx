@@ -1,4 +1,18 @@
-import { Check, CircleCheck, Crown, Eye, EyeOff, KeyRound, Loader2, Mail, Phone, type LucideIcon } from 'lucide-react'
+import {
+  Check,
+  Circle,
+  CircleCheck,
+  CircleX,
+  Crown,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Mail,
+  Phone,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,6 +28,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { evaluatePassword, generateStrongPassword, PASSWORD_MAX_LENGTH } from '@/lib/passwordPolicy'
 import { cn } from '@/lib/utils'
 import { adminService } from '@/services/adminService'
 import { getErrorMessage, getFieldErrors } from '@/services/apiClient'
@@ -22,9 +37,6 @@ import type { RoleName, StaffResponse } from '@/types'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 /** Vietnamese mobile/landline: 10 digits starting with 0, spaces allowed while typing. */
 const PHONE_PATTERN = /^0\d{9}$/
-const PASSWORD_MIN = 6
-/** BCrypt ignores bytes past 72; the backend rejects longer passwords. */
-const PASSWORD_MAX = 72
 /** AdminService rejects duplicates with "User with email '…' already exists". */
 const DUPLICATE_EMAIL_MESSAGE = /already exists/i
 
@@ -80,13 +92,32 @@ function StaffForm({ staff, onSaved }: { staff: StaffResponse | null; onSaved: S
   const [email, setEmail] = useState(staff?.email ?? '')
   const [phone, setPhone] = useState(staff?.phone ?? '')
   const [password, setPassword] = useState('')
+  const [passwordTouched, setPasswordTouched] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [roleName, setRoleName] = useState<RoleName>(staff?.roleName ?? 'STAFF')
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const passwordEvaluation = evaluatePassword(password, email, fullName)
+  const showPasswordChecklistErrors = passwordTouched || password.length > 0
+
   function clearError(field: keyof FormErrors) {
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }))
+  }
+
+  function syncPasswordError(nextPassword: string, nextEmail: string, nextFullName: string, forceCheck = false) {
+    if (isEdit) return
+    if (!forceCheck && !passwordTouched && !errors.password) return
+    const evaluation = evaluatePassword(nextPassword, nextEmail, nextFullName)
+    setErrors((prev) => ({ ...prev, password: evaluation.firstError ?? undefined }))
+  }
+
+  function handleGeneratePassword() {
+    const generated = generateStrongPassword(email, fullName)
+    setPassword(generated)
+    setShowPassword(true)
+    setPasswordTouched(true)
+    setErrors((prev) => ({ ...prev, password: undefined }))
   }
 
   function validate(): FormErrors {
@@ -96,9 +127,9 @@ function StaffForm({ staff, onSaved }: { staff: StaffResponse | null; onSaved: S
     if (!isEdit) {
       if (!email.trim()) next.email = 'Vui lòng nhập email.'
       else if (!EMAIL_PATTERN.test(email.trim())) next.email = 'Email không hợp lệ.'
-      if (!password) next.password = 'Vui lòng nhập mật khẩu.'
-      else if (password.length < PASSWORD_MIN) next.password = `Mật khẩu cần ít nhất ${PASSWORD_MIN} ký tự.`
-      else if (password.length > PASSWORD_MAX) next.password = `Mật khẩu tối đa ${PASSWORD_MAX} ký tự.`
+      if (!passwordEvaluation.isValid) {
+        next.password = passwordEvaluation.firstError ?? 'Mật khẩu chưa đạt yêu cầu bảo mật.'
+      }
     }
     if (normalizedPhone && !PHONE_PATTERN.test(normalizedPhone)) {
       next.phone = 'Số điện thoại gồm 10 chữ số, bắt đầu bằng 0.'
@@ -109,6 +140,8 @@ function StaffForm({ staff, onSaved }: { staff: StaffResponse | null; onSaved: S
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (isSubmitting) return
+    if (!isEdit) setPasswordTouched(true)
+
     const nextErrors = validate()
     setErrors(nextErrors)
     if (Object.values(nextErrors).some(Boolean)) return
@@ -152,8 +185,10 @@ function StaffForm({ staff, onSaved }: { staff: StaffResponse | null; onSaved: S
               placeholder="Ví dụ: Nguyễn Văn An"
               value={fullName}
               onChange={(event) => {
-                setFullName(event.target.value)
+                const value = event.target.value
+                setFullName(value)
                 clearError('fullName')
+                syncPasswordError(password, email, value)
               }}
             />
           )}
@@ -177,8 +212,10 @@ function StaffForm({ staff, onSaved }: { staff: StaffResponse | null; onSaved: S
                 disabled={isEdit}
                 value={email}
                 onChange={(event) => {
-                  setEmail(event.target.value)
+                  const value = event.target.value
+                  setEmail(value)
                   clearError('email')
+                  syncPasswordError(password, value, fullName)
                 }}
               />
             )}
@@ -204,38 +241,77 @@ function StaffForm({ staff, onSaved }: { staff: StaffResponse | null; onSaved: S
         </div>
 
         {!isEdit && (
-          <FormField
-            label="Mật khẩu"
-            required
-            error={errors.password}
-            icon={<KeyRound />}
-          >
-            {(fieldProps) => (
-              <>
-                <Input
-                  {...fieldProps}
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  className="pl-9 pr-10"
-                  value={password}
-                  onChange={(event) => {
-                    setPassword(event.target.value)
-                    clearError('password')
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((shown) => !shown)}
-                  className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                  aria-pressed={showPassword}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </>
-            )}
-          </FormField>
+          <div className="space-y-2.5">
+            <div className="relative">
+              <FormField label="Mật khẩu" required error={errors.password} icon={<KeyRound />}>
+                {(fieldProps) => (
+                  <>
+                    <Input
+                      {...fieldProps}
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      maxLength={PASSWORD_MAX_LENGTH + 4}
+                      placeholder="Nhập 6–12 ký tự"
+                      className="pl-9 pr-10"
+                      value={password}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setPassword(value)
+                        syncPasswordError(value, email, fullName, true)
+                      }}
+                      onBlur={() => {
+                        setPasswordTouched(true)
+                        syncPasswordError(password, email, fullName, true)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((shown) => !shown)}
+                      className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      aria-pressed={showPassword}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </>
+                )}
+              </FormField>
+
+              <button
+                type="button"
+                onClick={handleGeneratePassword}
+                className="absolute right-0 top-0 inline-flex items-center gap-1 rounded text-xs font-medium text-brand-600 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                Tạo mật khẩu mạnh
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+              <p className="mb-2 text-xs font-medium text-slate-600">Yêu cầu mật khẩu:</p>
+              <ul className="grid gap-1.5 text-xs sm:grid-cols-2" aria-label="Tiêu chí mật khẩu">
+                {passwordEvaluation.rules.map((rule) => {
+                  const Icon = rule.passed ? CircleCheck : showPasswordChecklistErrors ? CircleX : Circle
+                  return (
+                    <li
+                      key={rule.id}
+                      className={cn(
+                        'flex items-start gap-1.5 leading-snug',
+                        rule.passed
+                          ? 'text-emerald-700'
+                          : showPasswordChecklistErrors
+                            ? 'text-red-600'
+                            : 'text-slate-500',
+                      )}
+                    >
+                      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span>{rule.label}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          </div>
         )}
 
         <fieldset className="space-y-2">

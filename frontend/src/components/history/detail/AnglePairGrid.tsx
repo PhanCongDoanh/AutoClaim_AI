@@ -6,7 +6,7 @@ import { angleNumber, getDamageLabel, toPercent } from '@/lib/damage'
 import { ANGLE_LABELS } from '@/components/inspection/photoAngles'
 import { cn } from '@/lib/utils'
 import type { AngleCode, ImageResult, SessionResultResponse } from '@/types'
-import { AnnotatedImage, type DamageOverlay } from '../check-out/damage-review/AnnotatedImage'
+import { AnnotatedImage, type DamageOverlay } from '@/pages/staff/check-out/damage-review/AnnotatedImage'
 import { AnglePairDialog } from './AnglePairDialog'
 
 function getOverlays(image: ImageResult): DamageOverlay[] {

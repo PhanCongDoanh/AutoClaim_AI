@@ -4,11 +4,14 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useHistoryMonths } from '@/hooks/useHistoryMonths'
+import { useHistoryStaff } from '@/hooks/useHistoryStaff'
+import { useHistorySummary } from '@/hooks/useHistorySummary'
 import { useInspectionHistory } from '@/hooks/useInspectionHistory'
-import type { InspectionHistoryQuery } from '@/types'
-import { HistoryFiltersBar } from './history/HistoryFilters'
-import { HistoryPagination } from './history/HistoryPagination'
-import { HistoryTable } from './history/HistoryTable'
+import type { AdminInspectionHistoryQuery, InspectionHistorySummaryQuery } from '@/types'
+import { AdminFiltersRow, HistoryFiltersBar } from './HistoryFilters'
+import { HistoryPagination } from './HistoryPagination'
+import { HistorySummaryCards } from './HistorySummaryCards'
+import { HistoryTable } from './HistoryTable'
 import {
   ALL_MONTHS,
   formatMonth,
@@ -16,33 +19,54 @@ import {
   HISTORY_PAGE_SIZE,
   parseHistoryFilters,
   toHistorySearchParams,
+  type HistoryBasePath,
   type HistoryFilters,
-} from './history/historyQuery'
+  type HistoryVariant,
+} from './historyQuery'
 
-/** Mockups S1 / S2 / S2b: returned rentals, filters + page kept in the query string. */
-export default function History() {
+const DESCRIPTIONS: Record<HistoryVariant, string> = {
+  staff: 'Các lượt thuê đã trả xe. Bấm “Xem” để xem lại ảnh và kết quả AI.',
+  admin: 'Toàn bộ lượt trả xe, kèm số liệu giám sát việc nhân viên loại lỗi AI. Trang chỉ xem.',
+}
+
+interface HistoryListPageProps {
+  basePath: HistoryBasePath
+  /** Admin adds the summary cards, the staff / override filters and the staff column. */
+  variant: HistoryVariant
+}
+
+/** Mockups S1 / S2 / S2b: returned rentals, filters + page kept in the query string. Shared by staff and admin. */
+export function HistoryListPage({ basePath, variant }: HistoryListPageProps) {
+  const isAdmin = variant === 'admin'
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const filters = parseHistoryFilters(searchParams)
+  const filters = parseHistoryFilters(searchParams, variant)
   const months = useHistoryMonths()
 
   // No month in the URL yet: current month if it has returned rentals, otherwise all time.
   const currentMonth = getCurrentMonth()
   const month =
     filters.month ?? (months.isLoading ? null : months.items.includes(currentMonth) ? currentMonth : ALL_MONTHS)
+  const monthParam = month === ALL_MONTHS || month === null ? undefined : month
+  const search = filters.q.trim() || undefined
 
-  const query: InspectionHistoryQuery | null =
+  const query: AdminInspectionHistoryQuery | null =
     month === null
       ? null
       : {
-          search: filters.q.trim() || undefined,
+          search,
           result: filters.result,
-          month: month === ALL_MONTHS ? undefined : month,
+          month: monthParam,
+          ...(isAdmin && { staffId: filters.staff ?? undefined, hasOverride: filters.override || undefined }),
           page: filters.page - 1,
           size: HISTORY_PAGE_SIZE,
         }
-  const history = useInspectionHistory(query)
+  const history = useInspectionHistory(query, variant)
   const data = history.data
+
+  const summaryQuery: InspectionHistorySummaryQuery | null =
+    isAdmin && month !== null ? { search, month: monthParam, staffId: filters.staff ?? undefined } : null
+  const summary = useHistorySummary(summaryQuery)
 
   function update(changes: Partial<HistoryFilters>) {
     // Any filter change goes back to page 1.
@@ -52,15 +76,19 @@ export default function History() {
 
   const from = data && data.items.length > 0 ? data.page * data.size + 1 : 0
   const to = data ? data.page * data.size + data.items.length : 0
-  const monthSuffix = month && month !== ALL_MONTHS ? ` trong tháng ${formatMonth(month)}` : ''
+  const monthSuffix = monthParam ? ` trong tháng ${formatMonth(monthParam)}` : ''
 
   return (
     <section className="space-y-7">
-      <PageHeader
-        icon={HistoryIcon}
-        title="Lịch sử kiểm định"
-        description="Các lượt thuê đã trả xe. Bấm “Xem” để xem lại ảnh và kết quả AI."
-      />
+      <PageHeader icon={HistoryIcon} title="Lịch sử kiểm định" description={DESCRIPTIONS[variant]} />
+
+      {isAdmin && (
+        <HistorySummaryCards
+          summary={summary.data}
+          isLoading={summary.isLoading || month === null}
+          isFetching={summary.isFetching}
+        />
+      )}
 
       <Card className="overflow-hidden">
         <div className="border-b p-4 sm:p-5">
@@ -72,6 +100,7 @@ export default function History() {
             month={month}
             months={months.items}
             onMonthChange={(value) => update({ month: value })}
+            extraRow={isAdmin ? <AdminFilters filters={filters} onChange={update} /> : undefined}
           />
         </div>
 
@@ -111,7 +140,13 @@ export default function History() {
                 </Button>
               </div>
             )}
-            <HistoryTable items={data.items} historySearch={location.search} isFetching={history.isFetching} />
+            <HistoryTable
+              items={data.items}
+              historySearch={location.search}
+              isFetching={history.isFetching}
+              basePath={basePath}
+              variant={variant}
+            />
             <div className="flex flex-col gap-3 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-600">
                 Hiển thị{' '}
@@ -131,6 +166,26 @@ export default function History() {
         )}
       </Card>
     </section>
+  )
+}
+
+interface AdminFiltersProps {
+  filters: HistoryFilters
+  onChange: (changes: Partial<HistoryFilters>) => void
+}
+
+/** Admin filters; the staff list is only fetched on the admin page. */
+function AdminFilters({ filters, onChange }: AdminFiltersProps) {
+  const staff = useHistoryStaff()
+  return (
+    <AdminFiltersRow
+      staffId={filters.staff}
+      staffOptions={staff.items}
+      staffLoading={staff.isLoading}
+      onStaffChange={(staffId) => onChange({ staff: staffId })}
+      overrideOnly={filters.override}
+      onOverrideOnlyChange={(override) => onChange({ override })}
+    />
   )
 }
 

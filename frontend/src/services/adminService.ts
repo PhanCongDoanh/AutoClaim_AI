@@ -1,6 +1,12 @@
 import type {
+  AdminInspectionHistoryQuery,
   CreateStaffRequest,
+  HistoryStaffOption,
+  InspectionHistoryItem,
+  InspectionHistorySummary,
+  InspectionHistorySummaryQuery,
   MessageResponse,
+  PageResponse,
   StaffResponse,
   UpdateStaffRequest,
   UUID,
@@ -69,6 +75,28 @@ export const adminService = {
 
   async deleteStaff(staffId: UUID): Promise<MessageResponse> {
     const { data } = await axiosInstance.delete<MessageResponse>(`/admin/staff/${staffId}`)
+    return data
+  },
+
+  /** Returned rentals with the monitoring filters (`GET /admin/inspections/history`), newest check-out first. */
+  async getHistory(query: AdminInspectionHistoryQuery): Promise<PageResponse<InspectionHistoryItem>> {
+    const { data } = await axiosInstance.get<PageResponse<InspectionHistoryItem>>('/admin/inspections/history', {
+      params: query,
+    })
+    return data
+  },
+
+  /** Summary cards over search / month / staff (`GET /admin/inspections/history/summary`). */
+  async getHistorySummary(query: InspectionHistorySummaryQuery): Promise<InspectionHistorySummary> {
+    const { data } = await axiosInstance.get<InspectionHistorySummary>('/admin/inspections/history/summary', {
+      params: query,
+    })
+    return data
+  },
+
+  /** Everyone who ran a check-out, soft-deleted users and admins included (`GET /admin/inspections/history/staff`). */
+  async getHistoryStaff(): Promise<HistoryStaffOption[]> {
+    const { data } = await axiosInstance.get<HistoryStaffOption[]>('/admin/inspections/history/staff')
     return data
   },
 }

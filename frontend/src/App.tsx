@@ -4,6 +4,8 @@ import ProtectedRoute from './components/layout/ProtectedRoute'
 import { Toaster } from './components/ui/sonner'
 import { AuthProvider } from './contexts/AuthContext'
 import Login from './pages/Login'
+import InspectionHistory from './pages/admin/InspectionHistory'
+import InspectionHistoryDetail from './pages/admin/InspectionHistoryDetail'
 import StaffManagement from './pages/admin/StaffManagement'
 import VehicleManagement from './pages/admin/VehicleManagement'
 import CheckIn from './pages/staff/CheckIn'
@@ -56,6 +58,8 @@ const router = createBrowserRouter([
           { index: true, element: <Navigate to="vehicles" replace /> },
           { path: 'vehicles', element: <VehicleManagement /> },
           { path: 'staff', element: <StaffManagement /> },
+          { path: 'history', element: <InspectionHistory /> },
+          { path: 'history/:checkOutSessionId', element: <InspectionHistoryDetail /> },
           { path: '*', element: <NotFound /> },
         ],
       },

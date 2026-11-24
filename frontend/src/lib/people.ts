@@ -6,9 +6,11 @@ export const ROLE_LABELS: Record<RoleName, string> = {
 }
 
 /** First letters of the family and given names, e.g. "Trần Quốc Bảo" → "TB". */
-export function getInitials(fullName: string): string {
-  const letters = fullName
+export function getInitials(fullName: string | null | undefined): string {
+  const letters = (fullName ?? '')
+    .trim()
     .split(/\s+/)
+    .filter((part) => part.length > 0)
     .map((part) => part.match(/\p{L}/u)?.[0])
     .filter((letter): letter is string => Boolean(letter))
   const picked = letters.length > 1 ? [letters[0], letters[letters.length - 1]] : letters

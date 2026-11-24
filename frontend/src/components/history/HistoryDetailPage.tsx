@@ -7,18 +7,21 @@ import { CarIllustration } from '@/components/vehicle/CarIllustration'
 import { useSessionResults } from '@/hooks/useSessionResults'
 import { formatDateTime } from '@/lib/format'
 import type { SessionResultResponse } from '@/types'
-import { useReportDownload } from './check-out/useReportDownload'
-import type { HistoryDetailLocationState } from './history/historyQuery'
-import { AiResultCard } from './history-detail/AiResultCard'
-import { AnglePairGrid } from './history-detail/AnglePairGrid'
-import { IdCardPhotosCard } from './history-detail/IdCardPhotosCard'
+import { useReportDownload } from '@/pages/staff/check-out/useReportDownload'
+import { AiResultCard } from './detail/AiResultCard'
+import { AnglePairGrid } from './detail/AnglePairGrid'
+import { IdCardPhotosCard } from './detail/IdCardPhotosCard'
+import type { HistoryBasePath, HistoryDetailLocationState } from './historyQuery'
 
-/** Mockup S3: read-only record of one returned rental (`/staff/history/:checkOutSessionId`). */
-export default function HistoryDetail() {
+/**
+ * Mockup S3: read-only record of one returned rental (`${basePath}/:checkOutSessionId`), shared by the staff and
+ * admin pages. No action besides downloading the report; anything added here shows up on both sides.
+ */
+export function HistoryDetailPage({ basePath }: { basePath: HistoryBasePath }) {
   const { checkOutSessionId } = useParams()
   const location = useLocation()
   const historySearch = (location.state as HistoryDetailLocationState | null)?.historySearch ?? ''
-  const backTo = `/staff/history${historySearch}`
+  const backTo = `${basePath}${historySearch}`
   const results = useSessionResults(checkOutSessionId ?? null)
   const session = results.data
   const isReturnedRental = session?.sessionType === 'CHECK_OUT' && session.bookingStatus === 'COMPLETED'

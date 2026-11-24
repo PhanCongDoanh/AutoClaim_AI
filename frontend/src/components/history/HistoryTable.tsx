@@ -6,7 +6,7 @@ import { CarIllustration } from '@/components/vehicle/CarIllustration'
 import { formatDateTime, formatShortDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { InspectionHistoryItem } from '@/types'
-import type { HistoryDetailLocationState } from './historyQuery'
+import type { HistoryBasePath, HistoryDetailLocationState, HistoryVariant } from './historyQuery'
 
 interface HistoryTableProps {
   items: InspectionHistoryItem[]
@@ -14,21 +14,27 @@ interface HistoryTableProps {
   historySearch: string
   /** Dims the rows while the next page loads. */
   isFetching: boolean
+  /** Detail links go to `${basePath}/:checkOutSessionId`. */
+  basePath: HistoryBasePath
+  /** Admin adds the "NV nhận lại xe" column and shows the rejected-detection count in the badge. */
+  variant: HistoryVariant
 }
 
 /** Table on md+ screens, cards below (tablet portrait / phone). */
-export function HistoryTable({ items, historySearch, isFetching }: HistoryTableProps) {
+export function HistoryTable({ items, historySearch, isFetching, basePath, variant }: HistoryTableProps) {
   const linkState: HistoryDetailLocationState = { historySearch }
+  const isAdmin = variant === 'admin'
   return (
     <div className={cn('transition-opacity', isFetching && 'pointer-events-none opacity-60')} aria-busy={isFetching}>
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className={cn('w-full text-sm', isAdmin ? 'min-w-[980px]' : 'min-w-[820px]')}>
           <thead>
             <tr className="border-b text-left text-[13px] text-slate-500">
               <th className="px-5 py-3 font-medium">Xe</th>
               <th className="px-3 py-3 font-medium">Khách thuê</th>
               <th className="px-3 py-3 font-medium">Nhận xe</th>
               <th className="px-3 py-3 font-medium">Trả xe</th>
+              {isAdmin && <th className="px-3 py-3 font-medium">NV nhận lại xe</th>}
               <th className="px-3 py-3 font-medium">Kết quả AI</th>
               <th className="px-5 py-3">
                 <span className="sr-only">Thao tác</span>
@@ -48,11 +54,16 @@ export function HistoryTable({ items, historySearch, isFetching }: HistoryTableP
                 <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-900">
                   {formatDateTime(item.checkOutAt)}
                 </td>
+                {isAdmin && (
+                  <td className="px-3 py-3">
+                    <StaffCell item={item} />
+                  </td>
+                )}
                 <td className="px-3 py-3">
-                  <ResultBadge item={item} />
+                  <ResultBadge item={item} showOverridden={isAdmin} />
                 </td>
                 <td className="px-5 py-3 text-right">
-                  <ViewButton item={item} state={linkState} />
+                  <ViewButton item={item} state={linkState} basePath={basePath} />
                 </td>
               </tr>
             ))}
@@ -65,7 +76,7 @@ export function HistoryTable({ items, historySearch, isFetching }: HistoryTableP
           <li key={item.checkOutSessionId} className="space-y-3 px-4 py-4">
             <div className="flex items-start justify-between gap-3">
               <VehicleCell item={item} />
-              <ResultBadge item={item} />
+              <ResultBadge item={item} showOverridden={isAdmin} />
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[13px]">
               <span className="text-slate-500">Khách thuê</span>
@@ -77,8 +88,19 @@ export function HistoryTable({ items, historySearch, isFetching }: HistoryTableP
               <span className="text-right text-slate-800">{formatShortDateTime(item.checkInAt)}</span>
               <span className="text-slate-500">Trả xe</span>
               <span className="text-right font-medium text-slate-900">{formatDateTime(item.checkOutAt)}</span>
+              {isAdmin && (
+                <>
+                  <span className="text-slate-500">NV nhận lại xe</span>
+                  <span className="text-right text-slate-800">
+                    {item.checkOutStaffName ?? '—'}
+                    {item.checkInStaffName && (
+                      <span className="block text-slate-500">Giao xe: {item.checkInStaffName}</span>
+                    )}
+                  </span>
+                </>
+              )}
             </div>
-            <ViewButton item={item} state={linkState} className="w-full" />
+            <ViewButton item={item} state={linkState} basePath={basePath} className="w-full" />
           </li>
         ))}
       </ul>
@@ -124,8 +146,40 @@ function RenterCell({ item }: { item: InspectionHistoryItem }) {
   )
 }
 
-function ResultBadge({ item }: { item: InspectionHistoryItem }) {
-  const tooltip = item.overriddenCount > 0 ? `Đã loại ${item.overriddenCount} lỗi AI nhầm` : undefined
+/** Admin: who reviewed the AI result, with the check-in staff underneath. */
+function StaffCell({ item }: { item: InspectionHistoryItem }) {
+  return (
+    <div className="leading-tight">
+      <p className="font-medium text-slate-900">{item.checkOutStaffName ?? '—'}</p>
+      {item.checkInStaffName && (
+        <p className="mt-0.5 text-[13px] text-slate-500">Giao xe: {item.checkInStaffName}</p>
+      )}
+    </div>
+  )
+}
+
+interface ResultBadgeProps {
+  item: InspectionHistoryItem
+  /** Admin: the rejected-detection count is shown under the badge, not only in a tooltip. */
+  showOverridden: boolean
+}
+
+function ResultBadge({ item, showOverridden }: ResultBadgeProps) {
+  const badge = <ResultPill item={item} withTooltip={!showOverridden} />
+  if (!showOverridden || item.overriddenCount === 0) return badge
+  return (
+    <span className="inline-flex flex-col items-end gap-1 md:items-start">
+      {badge}
+      <span className="whitespace-nowrap text-xs font-medium text-amber-700">
+        {item.overriddenCount} lỗi đã loại
+      </span>
+    </span>
+  )
+}
+
+function ResultPill({ item, withTooltip }: { item: InspectionHistoryItem; withTooltip: boolean }) {
+  const tooltip =
+    withTooltip && item.overriddenCount > 0 ? `Đã loại ${item.overriddenCount} lỗi AI nhầm` : undefined
   const isDamaged = item.damageCount > 0
   return (
     <span
@@ -146,13 +200,14 @@ function ResultBadge({ item }: { item: InspectionHistoryItem }) {
 interface ViewButtonProps {
   item: InspectionHistoryItem
   state: HistoryDetailLocationState
+  basePath: HistoryBasePath
   className?: string
 }
 
-function ViewButton({ item, state, className }: ViewButtonProps) {
+function ViewButton({ item, state, basePath, className }: ViewButtonProps) {
   return (
     <Button asChild variant="secondary" size="sm" className={cn('h-9 rounded-lg px-3', className)}>
-      <Link to={`/staff/history/${item.checkOutSessionId}`} state={state}>
+      <Link to={`${basePath}/${item.checkOutSessionId}`} state={state}>
         <Eye />
         Xem
       </Link>
