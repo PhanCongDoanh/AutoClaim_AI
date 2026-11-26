@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import InspectionHistory from './pages/admin/InspectionHistory'
 import InspectionHistoryDetail from './pages/admin/InspectionHistoryDetail'
 import StaffManagement from './pages/admin/StaffManagement'
+import Statistics from './pages/admin/Statistics'
 import VehicleManagement from './pages/admin/VehicleManagement'
 import CheckIn from './pages/staff/CheckIn'
 import CheckOut from './pages/staff/CheckOut'
@@ -60,11 +61,13 @@ const router = createBrowserRouter([
           { path: 'staff', element: <StaffManagement /> },
           { path: 'history', element: <InspectionHistory /> },
           { path: 'history/:checkOutSessionId', element: <InspectionHistoryDetail /> },
+          { path: 'statistics', element: <Statistics /> },
           { path: '*', element: <NotFound /> },
         ],
       },
     ],
   },
+  { path: '/statistics', element: <Navigate to="/admin/statistics" replace /> },
   { path: '*', element: <NotFound /> },
 ])
 

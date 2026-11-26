@@ -1,0 +1,2 @@
+
+ALTER TABLE vehicles DROP COLUMN IF EXISTS avatar_data;

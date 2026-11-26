@@ -1,4 +1,4 @@
-import { Car, ChevronDown, History, LogOut, Menu, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react'
+import { BarChart3, Car, ChevronDown, History, LogOut, Menu, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import {
@@ -34,6 +34,7 @@ const NAV_ITEMS_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/admin/vehicles', label: 'Quản lý xe', icon: Car },
     { to: '/admin/staff', label: 'Nhân viên', icon: Users },
     { to: '/admin/history', label: 'Lịch sử kiểm định', icon: History },
+    { to: '/admin/statistics', label: 'Thống kê', icon: BarChart3 },
   ],
 }
 
