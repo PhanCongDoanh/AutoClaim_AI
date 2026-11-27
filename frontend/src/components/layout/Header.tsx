@@ -28,12 +28,12 @@ const NAV_ITEMS_BY_ROLE: Record<Role, NavItem[]> = {
   STAFF: [
     // Check-in / check-out are started from a vehicle card, so they are not menu entries.
     { to: '/staff', label: 'Danh sách xe', icon: Car, end: true },
-    { to: '/staff/history', label: 'Lịch sử kiểm định', icon: History },
+    { to: '/staff/history', label: 'Lịch sử thuê xe', icon: History },
   ],
   ADMIN: [
     { to: '/admin/vehicles', label: 'Quản lý xe', icon: Car },
     { to: '/admin/staff', label: 'Nhân viên', icon: Users },
-    { to: '/admin/history', label: 'Lịch sử kiểm định', icon: History },
+    { to: '/admin/history', label: 'Lịch sử thuê xe', icon: History },
     { to: '/admin/statistics', label: 'Thống kê', icon: BarChart3 },
   ],
 }
