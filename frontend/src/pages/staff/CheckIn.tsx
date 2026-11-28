@@ -49,7 +49,7 @@ export default function CheckIn() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const { getSlot, capture, countReady, getOrderedFiles } = usePhotoCapture()
+  const { getSlot, capture, countReady, getOrderedFiles, invalidateSlots } = usePhotoCapture()
   const idCardReady = countReady(ID_CARD_PHOTO_KEYS)
   const vehicleReady = countReady(VEHICLE_PHOTO_KEYS)
   const allPhotos = getOrderedFiles(CHECK_IN_PHOTO_KEYS)
@@ -83,8 +83,23 @@ export default function CheckIn() {
         checkedIn: { model: vehicle.model, licensePlate: vehicle.licensePlate },
       }
       navigate('/staff', { replace: true, state })
-    } catch (err) {
-      setSubmitError(getErrorMessage(err))
+    } catch (err: unknown) {
+      const anyErr = err as {
+        response?: {
+          data?: {
+            message?: string
+            details?: {
+              invalidAngles?: Record<string, { errorCode?: string; message?: string }>
+            }
+          }
+        }
+      }
+      const message = anyErr?.response?.data?.message || getErrorMessage(err)
+      setSubmitError(message)
+      const invalidAngles = anyErr?.response?.data?.details?.invalidAngles
+      if (invalidAngles) {
+        invalidateSlots(invalidAngles)
+      }
       setIsSubmitting(false)
     }
   }
@@ -125,15 +140,17 @@ export default function CheckIn() {
             <VehicleAnglesStep
               title="Ảnh ngoại thất"
               getSlot={getSlot}
-              onCapture={capture}
+              onCapture={(key, file) =>
+                capture(key, file, { vehicleId: vehicle.vehicleId, sessionType: 'CHECK_IN' })
+              }
               readyCount={vehicleReady}
               disabled={isSubmitting}
+              sessionType="CHECK_IN"
               note={
                 <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                   <p>
-                    Khi bấm <strong>Xác nhận cho thuê</strong>, 8 ảnh được lưu làm ảnh gốc của phiên thuê và
-                    xe tự động chuyển sang <strong>Đang thuê</strong>.
+                    Khi bấm <strong>Xác nhận cho thuê</strong>, 8 ảnh hợp lệ sẽ được lưu làm bộ ảnh gốc của phiên thuê.
                   </p>
                 </div>
               }
@@ -185,7 +202,11 @@ export default function CheckIn() {
                 <ArrowLeft />
                 Quay lại
               </Button>
-              <Button onClick={handleSubmit} disabled={!allPhotos || isSubmitting} className={PAGE_PRIMARY_ACTION_CLASS}>
+              <Button
+                onClick={handleSubmit}
+                disabled={!allPhotos || vehicleReady < VEHICLE_PHOTO_KEYS.length || isSubmitting}
+                className={PAGE_PRIMARY_ACTION_CLASS}
+              >
                 {isSubmitting ? <Loader2 className="animate-spin" /> : <Check />}
                 {isSubmitting ? 'Đang tải ảnh lên…' : 'Xác nhận cho thuê'}
               </Button>

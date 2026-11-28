@@ -82,6 +82,27 @@ public class S3StorageService {
     }
 
     /**
+     * Uploads raw bytes to the configured bucket under {@code folder/} and returns its public URL.
+     */
+    public String uploadBytes(byte[] data, String folder, String filename, String contentType) {
+        if (data == null || data.length == 0) {
+            throw new BadRequestException("Cannot upload empty data");
+        }
+        String key = buildKey(folder, filename);
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .contentType(StringUtils.hasText(contentType) ? contentType : "image/jpeg")
+                .build();
+        try {
+            s3Client.putObject(request, RequestBody.fromBytes(data));
+        } catch (SdkException ex) {
+            throw new StorageException("Failed to upload bytes to object storage", ex);
+        }
+        return buildPublicUrl(key);
+    }
+
+    /**
      * Best-effort download of a stored file (e.g. an inspection photo for the PDF report). Objects of this
      * bucket are read through the S3 API (no need for a public bucket); other URLs over HTTP with short timeouts.
      * Never throws: any failure returns an empty Optional.

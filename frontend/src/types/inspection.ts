@@ -5,6 +5,35 @@ import type { VehicleResponse } from './vehicle'
 /** `inspection_sessions.ai_status` of a CHECK_OUT session (a missing value is reported as `FAILED`). */
 export type AiStatus = 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED'
 
+/** Trạng thái tiền kiểm định góc chụp của từng slot ảnh (FAIL-CLOSED) */
+export type SlotValidationStatus = 'EMPTY' | 'VALIDATING' | 'VALID' | 'INVALID' | 'ERROR'
+
+export interface SlotValidationQualityDetails {
+  blur_score?: number
+  brightness?: number
+  width?: number
+  height?: number
+}
+
+export interface SlotValidationResult {
+  valid: boolean
+  expectedAngle?: AngleCode | string | null
+  detectedAngle?: AngleCode | string | null
+  viewpointVerified?: boolean
+  viewpointScore?: number | null
+  qualityPassed?: boolean
+  qualityDetails?: SlotValidationQualityDetails | null
+  aligned?: boolean
+  alignmentReliable?: boolean
+  inliers?: number | null
+  deviationPercent?: number | null
+  comparableCoveragePercent?: number | null
+  maxDeviationPercent?: number | null
+  errorCode?: string | null
+  message?: string | null
+  imageHash?: string | null
+}
+
 /** Mirrors `CheckInRequest` (sent as the `data` part of a multipart request). */
 export interface CheckInRequest {
   renterName: string

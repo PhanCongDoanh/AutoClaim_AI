@@ -48,6 +48,20 @@ public class VehicleService {
     private final BookingRepository bookingRepository;
     private final InspectionSessionRepository inspectionSessionRepository;
     private final DamageDetectionRepository damageDetectionRepository;
+    private final com.autoclaim.api.repository.VehicleReferenceImageRepository vehicleReferenceImageRepository;
+
+    public Map<String, String> getReferenceImages(UUID vehicleId) {
+        if (!vehicleRepository.existsById(vehicleId)) {
+            throw new ResourceNotFoundException("Vehicle", vehicleId);
+        }
+        var refs = vehicleReferenceImageRepository.findByVehicle_VehicleId(vehicleId);
+        return refs.stream()
+                .collect(Collectors.toMap(
+                        ref -> ref.getAngleCode().name(),
+                        com.autoclaim.api.entity.VehicleReferenceImage::getImageUrl,
+                        (v1, v2) -> v1
+                ));
+    }
 
     public List<VehicleResponseDto> getVehicles(VehicleStatus status, String search) {
         List<Vehicle> vehicles = StringUtils.hasText(search)

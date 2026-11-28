@@ -8,6 +8,7 @@ import com.autoclaim.api.dto.response.DamageDto;
 import com.autoclaim.api.dto.response.ImageResultDto;
 import com.autoclaim.api.dto.response.InspectionResponseDto;
 import com.autoclaim.api.dto.response.SessionResultResponseDto;
+import com.autoclaim.api.dto.response.SlotValidationResponseDto;
 import com.autoclaim.api.dto.response.VehicleResponseDto;
 import com.autoclaim.api.entity.Booking;
 import com.autoclaim.api.entity.DamageDetection;
@@ -16,6 +17,7 @@ import com.autoclaim.api.entity.InspectionSession;
 import com.autoclaim.api.entity.Renter;
 import com.autoclaim.api.entity.User;
 import com.autoclaim.api.entity.Vehicle;
+import com.autoclaim.api.entity.VehicleReferenceImage;
 import com.autoclaim.api.entity.enums.AiStatus;
 import com.autoclaim.api.entity.enums.AngleCode;
 import com.autoclaim.api.entity.enums.BookingStatus;
@@ -24,15 +26,18 @@ import com.autoclaim.api.entity.enums.VehicleStatus;
 import com.autoclaim.api.exception.BadRequestException;
 import com.autoclaim.api.exception.ConflictException;
 import com.autoclaim.api.exception.ResourceNotFoundException;
+import com.autoclaim.api.exception.ValidationFailedException;
 import com.autoclaim.api.repository.BookingRepository;
 import com.autoclaim.api.repository.DamageDetectionRepository;
 import com.autoclaim.api.repository.InspectionImageRepository;
 import com.autoclaim.api.repository.InspectionSessionRepository;
 import com.autoclaim.api.repository.RenterRepository;
 import com.autoclaim.api.repository.UserRepository;
+import com.autoclaim.api.repository.VehicleReferenceImageRepository;
 import com.autoclaim.api.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -42,7 +47,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.HashSet;
+import java.util.Set;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -97,6 +107,27 @@ public class InspectionServiceImpl implements InspectionService {
     private final S3StorageService s3StorageService;
     private final AiServiceClient aiServiceClient;
     private final AiStatusUpdater aiStatusUpdater;
+    private final VehicleReferenceImageRepository vehicleReferenceImageRepository;
+
+    @Value("${app.env:production}")
+    private String appEnv;
+
+    @Value("${app.inspection.allow-identical-checkout-image:false}")
+    private boolean allowIdenticalCheckoutImageConfig;
+
+    private boolean isAllowIdenticalCheckoutImage() {
+        if (!StringUtils.hasText(appEnv)) {
+            return false;
+        }
+        String env = appEnv.trim().toLowerCase();
+        if ("prod".equals(env) || "production".equals(env)) {
+            return false;
+        }
+        if (!Set.of("dev", "development", "test", "testing", "local").contains(env)) {
+            return false;
+        }
+        return allowIdenticalCheckoutImageConfig;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -110,6 +141,79 @@ public class InspectionServiceImpl implements InspectionService {
             throw new BadRequestException(
                     "Vehicle %s is not available for check-in (current status: %s)"
                             .formatted(vehicle.getLicensePlate(), vehicle.getStatus()));
+        }
+
+        // 1. Kiểm tra chống trùng lặp CCCD (index 0 và index 1)
+        String cccdFrontHash = computeSha256(images.get(0));
+        String cccdBackHash = computeSha256(images.get(1));
+        if (!cccdFrontHash.isEmpty() && cccdFrontHash.equals(cccdBackHash)) {
+            throw new ValidationFailedException(
+                    "Ảnh CCCD mặt sau bị trùng lặp với mặt trước. Vui lòng chụp rõ hai mặt thẻ riêng biệt.",
+                    "DUPLICATE_CCCD_IMAGE",
+                    Map.of("invalidAngles", Map.of(
+                            "CCCD_BACK", Map.of(
+                                    "errorCode", "DUPLICATE_IMAGE",
+                                    "message", "Ảnh CCCD mặt sau bị trùng lặp với mặt trước."
+                            )
+                    ))
+            );
+        }
+
+        // 2. Kiểm tra chống trùng lặp giữa các góc chụp xe (Intra-batch duplicate check)
+        Map<String, Integer> seenHashes = new LinkedHashMap<>();
+        Map<String, Object> duplicateAngles = new LinkedHashMap<>();
+
+        if (!cccdFrontHash.isEmpty()) seenHashes.put(cccdFrontHash, 0);
+        if (!cccdBackHash.isEmpty()) seenHashes.put(cccdBackHash, 1);
+
+        for (int i = 2; i < images.size(); i++) {
+            String hash = computeSha256(images.get(i));
+            if (hash.isEmpty()) continue;
+            AngleCode currAngle = CHECK_IN_ANGLES.get(i);
+            if (seenHashes.containsKey(hash)) {
+                int firstIdx = seenHashes.get(hash);
+                AngleCode prevAngle = CHECK_IN_ANGLES.get(firstIdx);
+                String prevName = getAngleDisplayName(prevAngle);
+                duplicateAngles.put(currAngle.name(), Map.of(
+                        "errorCode", "DUPLICATE_IMAGE",
+                        "message", "Ảnh này đã được sử dụng tại " + prevName + ". Vui lòng chụp ảnh khác."
+                ));
+            } else {
+                seenHashes.put(hash, i);
+            }
+        }
+
+        if (!duplicateAngles.isEmpty()) {
+            throw new ValidationFailedException(
+                    "Bộ ảnh Check-in có ảnh trùng lặp. Mỗi góc xe phải là ảnh chụp riêng biệt.",
+                    "DUPLICATE_IMAGE_BATCH",
+                    Map.of("invalidAngles", duplicateAngles)
+            );
+        }
+
+        // 3. Final Submission Gate: Tiền kiểm định toàn bộ 8 góc xe trước khi commit (chỉ kiểm tra góc và chất lượng ảnh)
+        Map<AngleCode, SlotValidationResponseDto> validationResults = new EnumMap<>(AngleCode.class);
+        Map<String, Object> invalidAngles = new LinkedHashMap<>();
+
+        for (int i = 2; i < CHECK_IN_ANGLES.size(); i++) {
+            AngleCode angle = CHECK_IN_ANGLES.get(i);
+            MultipartFile file = images.get(i);
+            SlotValidationResponseDto val = validateSlot(vehicle.getVehicleId(), null, angle, SessionType.CHECK_IN, file, null);
+            validationResults.put(angle, val);
+            if (!val.isValid()) {
+                invalidAngles.put(angle.name(), Map.of(
+                        "errorCode", val.getErrorCode() != null ? val.getErrorCode() : "INVALID_ANGLE",
+                        "message", val.getMessage() != null ? val.getMessage() : "Ảnh không đạt chuẩn kiểm định"
+                ));
+            }
+        }
+
+        if (!invalidAngles.isEmpty()) {
+            throw new ValidationFailedException(
+                    "Một hoặc nhiều góc ảnh Check-in không đạt tiêu chuẩn kiểm định.",
+                    "VALIDATION_FAILED",
+                    Map.of("invalidAngles", invalidAngles)
+            );
         }
 
         User staff = resolveCurrentStaff();
@@ -143,8 +247,8 @@ public class InspectionServiceImpl implements InspectionService {
                 .build();
         session = inspectionSessionRepository.saveAndFlush(session);
 
-        // d. Upload the 10 MultipartFiles to S3 and save their URLs into inspection_images
-        List<InspectionImage> savedImages = saveInspectionImages(session, images, CHECK_IN_ANGLES);
+        // d. Upload the 10 MultipartFiles to S3 and save their URLs into inspection_images with validation metadata
+        List<InspectionImage> savedImages = saveInspectionImages(session, images, CHECK_IN_ANGLES, validationResults);
 
         return InspectionResponseDto.builder()
                 .sessionId(session.getSessionId())
@@ -187,6 +291,60 @@ public class InspectionServiceImpl implements InspectionService {
                     "Xe %s không ở trạng thái Đang thuê nên không thể check-out.".formatted(vehicle.getLicensePlate()));
         }
 
+        // 1. Kiểm tra chống trùng lặp ảnh trong bộ 8 ảnh nhận lại xe
+        Map<String, Integer> seenHashes = new LinkedHashMap<>();
+        Map<String, Object> duplicateAngles = new LinkedHashMap<>();
+
+        for (int i = 0; i < images.size(); i++) {
+            String hash = computeSha256(images.get(i));
+            if (hash.isEmpty()) continue;
+            AngleCode currAngle = CHECK_OUT_ANGLES.get(i);
+            if (seenHashes.containsKey(hash)) {
+                int firstIdx = seenHashes.get(hash);
+                AngleCode prevAngle = CHECK_OUT_ANGLES.get(firstIdx);
+                String prevName = getAngleDisplayName(prevAngle);
+                duplicateAngles.put(currAngle.name(), Map.of(
+                        "errorCode", "DUPLICATE_IMAGE",
+                        "message", "Ảnh này đã được sử dụng tại " + prevName + ". Vui lòng chụp ảnh khác."
+                ));
+            } else {
+                seenHashes.put(hash, i);
+            }
+        }
+
+        if (!duplicateAngles.isEmpty()) {
+            throw new ValidationFailedException(
+                    "Bộ ảnh Check-out có ảnh trùng lặp. Mỗi góc xe phải là ảnh chụp riêng biệt.",
+                    "DUPLICATE_IMAGE_BATCH",
+                    Map.of("invalidAngles", duplicateAngles)
+            );
+        }
+
+        // 2. Final Submission Gate: Tiền kiểm định toàn bộ 8 góc đối chiếu với ảnh giao xe đã xác nhận
+        Map<AngleCode, SlotValidationResponseDto> validationResults = new EnumMap<>(AngleCode.class);
+        Map<String, Object> invalidAngles = new LinkedHashMap<>();
+
+        for (int i = 0; i < CHECK_OUT_ANGLES.size(); i++) {
+            AngleCode angle = CHECK_OUT_ANGLES.get(i);
+            MultipartFile file = images.get(i);
+            SlotValidationResponseDto val = validateSlot(vehicle.getVehicleId(), booking.getBookingId(), angle, SessionType.CHECK_OUT, file, null);
+            validationResults.put(angle, val);
+            if (!val.isValid()) {
+                invalidAngles.put(angle.name(), Map.of(
+                        "errorCode", val.getErrorCode() != null ? val.getErrorCode() : "INVALID_ANGLE",
+                        "message", val.getMessage() != null ? val.getMessage() : "Ảnh không đạt chuẩn kiểm định căn chỉnh"
+                ));
+            }
+        }
+
+        if (!invalidAngles.isEmpty()) {
+            throw new ValidationFailedException(
+                    "Một hoặc nhiều góc ảnh Check-out không đạt tiêu chuẩn căn chỉnh hoặc góc chụp.",
+                    "VALIDATION_FAILED",
+                    Map.of("invalidAngles", invalidAngles)
+            );
+        }
+
         User staff = resolveCurrentStaff();
 
         // c. Create the CHECK_OUT session; the AI service moves it to PROCESSING / DONE / FAILED
@@ -198,8 +356,8 @@ public class InspectionServiceImpl implements InspectionService {
                 .build();
         session = inspectionSessionRepository.saveAndFlush(session);
 
-        // d. Upload the 8 images to S3 (ANGLE_1 to ANGLE_8) and save their URLs
-        List<InspectionImage> savedImages = saveInspectionImages(session, images, CHECK_OUT_ANGLES);
+        // d. Upload the 8 images to S3 (ANGLE_1 to ANGLE_8) and save their URLs with validation metadata
+        List<InspectionImage> savedImages = saveInspectionImages(session, images, CHECK_OUT_ANGLES, validationResults);
 
         // e. Trigger the AI only once the images are committed and visible to it
         triggerAiAfterCommit(session.getSessionId());
@@ -556,6 +714,14 @@ public class InspectionServiceImpl implements InspectionService {
             InspectionSession session,
             List<MultipartFile> files,
             List<AngleCode> angleCodes) {
+        return saveInspectionImages(session, files, angleCodes, null);
+    }
+
+    private List<InspectionImage> saveInspectionImages(
+            InspectionSession session,
+            List<MultipartFile> files,
+            List<AngleCode> angleCodes,
+            Map<AngleCode, SlotValidationResponseDto> validationResults) {
 
         String folder = "inspections/" + session.getSessionId();
         List<String> uploadedUrls = new ArrayList<>(angleCodes.size());
@@ -566,11 +732,25 @@ public class InspectionServiceImpl implements InspectionService {
                 String imageUrl = s3StorageService.uploadFile(files.get(i), folder);
                 uploadedUrls.add(imageUrl);
 
-                entities.add(InspectionImage.builder()
+                AngleCode angle = angleCodes.get(i);
+                SlotValidationResponseDto val = validationResults != null ? validationResults.get(angle) : null;
+
+                InspectionImage.InspectionImageBuilder imgBuilder = InspectionImage.builder()
                         .session(session)
-                        .angleCode(angleCodes.get(i))
-                        .imageUrl(imageUrl)
-                        .build());
+                        .angleCode(angle)
+                        .imageUrl(imageUrl);
+
+                if (val != null) {
+                    imgBuilder.isValid(val.isValid())
+                            .detectedAngle(val.getDetectedAngle())
+                            .deviationPercent(val.getDeviationPercent())
+                            .alignmentReliable(val.isAlignmentReliable())
+                            .errorCode(val.getErrorCode());
+                } else {
+                    imgBuilder.isValid(true);
+                }
+
+                entities.add(imgBuilder.build());
             }
         } catch (RuntimeException ex) {
             // A mid-batch failure: remove the files that already made it to the bucket.
@@ -581,6 +761,155 @@ public class InspectionServiceImpl implements InspectionService {
         // If the DB transaction later rolls back, remove the uploaded files as well.
         s3StorageService.deleteOnRollback(uploadedUrls);
         return inspectionImageRepository.saveAllAndFlush(entities);
+    }
+
+    @Override
+    public SlotValidationResponseDto validateSlot(
+            UUID vehicleId,
+            UUID bookingId,
+            AngleCode angleCode,
+            SessionType sessionType,
+            MultipartFile image,
+            List<String> clientHashes) {
+
+        if (image == null || image.isEmpty()) {
+            return SlotValidationResponseDto.builder()
+                    .valid(false)
+                    .errorCode("INVALID_IMAGE")
+                    .message("Tệp ảnh không hợp lệ hoặc rỗng.")
+                    .build();
+        }
+
+        // 1. Calculate SHA-256
+        String imageHash = computeSha256(image);
+
+        // 2. Check duplicate with client hashes
+        if (clientHashes != null && !imageHash.isEmpty() && clientHashes.contains(imageHash)) {
+            return SlotValidationResponseDto.builder()
+                    .valid(false)
+                    .expectedAngle(angleCode != null ? angleCode.name() : null)
+                    .errorCode("DUPLICATE_IMAGE")
+                    .message("Ảnh này đã được sử dụng tại một góc khác. Vui lòng chụp ảnh khác.")
+                    .imageHash(imageHash)
+                    .build();
+        }
+
+        // 3. Resolve reference image
+        byte[] refBytes = null;
+        String refFilename = null;
+
+        if (sessionType == SessionType.CHECK_OUT) {
+            if (bookingId == null) {
+                return SlotValidationResponseDto.builder()
+                        .valid(false)
+                        .expectedAngle(angleCode != null ? angleCode.name() : null)
+                        .errorCode("MISSING_BOOKING_ID")
+                        .message("Thiếu mã đơn thuê (bookingId) để lấy ảnh đối chứng giao xe.")
+                        .imageHash(imageHash)
+                        .build();
+            }
+
+            var checkInSession = inspectionSessionRepository
+                    .findFirstByBooking_BookingIdAndSessionTypeOrderByCreatedAtDesc(bookingId, SessionType.CHECK_IN)
+                    .orElse(null);
+
+            if (checkInSession != null) {
+                var checkInImages = inspectionImageRepository.findBySession_SessionId(checkInSession.getSessionId());
+                var matchingImage = checkInImages.stream()
+                        .filter(img -> img.getAngleCode() == angleCode)
+                        .findFirst()
+                        .orElse(null);
+
+                if (matchingImage != null && StringUtils.hasText(matchingImage.getImageUrl())) {
+                    refBytes = s3StorageService.download(matchingImage.getImageUrl()).orElse(null);
+                    refFilename = "checkin_" + angleCode.name() + ".jpg";
+                }
+            }
+
+            if (refBytes == null) {
+                String angleName = getAngleDisplayName(angleCode);
+                log.warn("No Check-in reference image found for booking {} angle {}", bookingId, angleCode);
+                return SlotValidationResponseDto.builder()
+                        .valid(false)
+                        .expectedAngle(angleCode != null ? angleCode.name() : null)
+                        .errorCode("MISSING_REFERENCE_IMAGE")
+                        .message("Không tìm thấy ảnh đối chứng giao xe (Check-in) cho góc " + angleName + ". Không thể đối chiếu nhận lại xe.")
+                        .imageHash(imageHash)
+                        .build();
+            }
+
+            if (!isAllowIdenticalCheckoutImage() && !imageHash.isEmpty() && imageHash.equals(computeSha256Bytes(refBytes))) {
+                return SlotValidationResponseDto.builder()
+                        .valid(false)
+                        .expectedAngle(angleCode != null ? angleCode.name() : null)
+                        .detectedAngle(angleCode != null ? angleCode.name() : null)
+                        .viewpointVerified(true)
+                        .qualityPassed(true)
+                        .aligned(true)
+                        .alignmentReliable(true)
+                        .deviationPercent(0.0)
+                        .errorCode("REUSED_REFERENCE_IMAGE")
+                        .message("Ảnh trả xe trùng hoàn toàn với ảnh nhận xe. Vui lòng chụp ảnh thực tế tại thời điểm trả xe.")
+                        .imageHash(imageHash)
+                        .build();
+            }
+        } else {
+            // CHECK_IN: Check-in tạo bộ ảnh gốc thực tế, không bắt buộc đối chiếu với ảnh mẫu hay ảnh phiên trước.
+            refBytes = null;
+            refFilename = null;
+        }
+
+        // 4. Call AI service
+        SlotValidationResponseDto result = aiServiceClient.validateSlot(
+                image, refBytes, refFilename, angleCode, sessionType);
+        if (result != null) {
+            result.setImageHash(imageHash);
+        }
+        return result;
+    }
+
+    public static String getAngleDisplayName(AngleCode code) {
+        if (code == null) return "";
+        return switch (code) {
+            case ANGLE_1 -> "Đầu xe";
+            case ANGLE_2 -> "Góc trước trái";
+            case ANGLE_3 -> "Hông trái";
+            case ANGLE_4 -> "Góc sau trái";
+            case ANGLE_5 -> "Đuôi xe";
+            case ANGLE_6 -> "Góc sau phải";
+            case ANGLE_7 -> "Hông phải";
+            case ANGLE_8 -> "Góc trước phải";
+            case CCCD_FRONT -> "CCCD mặt trước";
+            case CCCD_BACK -> "CCCD mặt sau";
+        };
+    }
+
+    private String computeSha256(MultipartFile file) {
+        if (file == null || file.isEmpty()) return "";
+        try {
+            return computeSha256Bytes(file.getBytes());
+        } catch (IOException e) {
+            log.error("Failed to calculate SHA-256 for file", e);
+            return "";
+        }
+    }
+
+    private String computeSha256Bytes(byte[] data) {
+        if (data == null || data.length == 0) return "";
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(data);
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            log.error("Failed to calculate SHA-256 for bytes", e);
+            return "";
+        }
     }
 
     /** The logged-in staff member (set by {@code JwtAuthenticationFilter}), else the default staff account. */

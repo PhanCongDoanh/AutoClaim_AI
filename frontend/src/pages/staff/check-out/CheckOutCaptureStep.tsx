@@ -31,7 +31,7 @@ export function CheckOutCaptureStep({ bookingId }: { bookingId: UUID }) {
   const vehicle = vehicles.find((item) => item.activeBookingId === bookingId)
   const checkIn = useSessionResults(vehicle?.checkInSessionId ?? null)
 
-  const { getSlot, capture, countReady, getOrderedFiles } = usePhotoCapture()
+  const { getSlot, capture, countReady, getOrderedFiles, invalidateSlots } = usePhotoCapture()
   const readyCount = countReady(VEHICLE_PHOTO_KEYS)
   const files = getOrderedFiles(VEHICLE_PHOTO_KEYS)
   const hasUnsentPhotos = VEHICLE_PHOTO_KEYS.some((key) => {
@@ -83,7 +83,7 @@ export function CheckOutCaptureStep({ bookingId }: { bookingId: UUID }) {
       const response = await inspectionService.checkOut({ bookingId }, files)
       setIsSent(true)
       navigate(`/staff/check-out?sessionId=${response.sessionId}`, { replace: true })
-    } catch (err) {
+    } catch (err: unknown) {
       const existingSessionId = getConflictSessionId(err)
       if (existingSessionId) {
         // F9: this booking was already checked out — continue with that session.
@@ -94,8 +94,22 @@ export function CheckOutCaptureStep({ bookingId }: { bookingId: UUID }) {
         navigate(`/staff/check-out?sessionId=${existingSessionId}`, { replace: true })
         return
       }
-      const message = getErrorMessage(err)
+      const anyErr = err as {
+        response?: {
+          data?: {
+            message?: string
+            details?: {
+              invalidAngles?: Record<string, { errorCode?: string; message?: string }>
+            }
+          }
+        }
+      }
+      const message = anyErr?.response?.data?.message || getErrorMessage(err)
       setSubmitError(message)
+      const invalidAngles = anyErr?.response?.data?.details?.invalidAngles
+      if (invalidAngles) {
+        invalidateSlots(invalidAngles)
+      }
       toast.error('Gửi ảnh trả xe thất bại', { description: message })
       setIsSubmitting(false)
     }
@@ -132,10 +146,26 @@ export function CheckOutCaptureStep({ bookingId }: { bookingId: UUID }) {
       <VehicleAnglesStep
         title="Ảnh trả xe"
         getSlot={getSlot}
-        onCapture={capture}
+        onCapture={(key, file) =>
+          capture(key, file, {
+            bookingId,
+            vehicleId: vehicle.vehicleId,
+            sessionType: 'CHECK_OUT',
+          })
+        }
         readyCount={readyCount}
         disabled={isSubmitting}
         referenceUrls={referenceUrls}
+        sessionType="CHECK_OUT"
+        note={
+          <div className="flex items-start gap-3 rounded-xl border border-blue-200/80 bg-[#eef4ff] px-4 py-3 text-[14px] text-slate-700">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+            <p>
+              Khi bấm <strong className="text-slate-900">Gửi AI kiểm tra hư hại</strong>, hệ thống sẽ đối chiếu
+              8 ảnh nhận lại xe với 8 ảnh đã lưu khi giao xe để phát hiện hư hỏng mới.
+            </p>
+          </div>
+        }
         aside={
           <Card className="space-y-2 p-5">
             <h2 className="text-sm font-semibold text-foreground">Ảnh gốc lúc check-in</h2>
@@ -176,14 +206,14 @@ export function CheckOutCaptureStep({ bookingId }: { bookingId: UUID }) {
             )}
           >
             <CircleCheck className="h-4 w-4" />
-            {readyCount}/{VEHICLE_PHOTO_KEYS.length} góc đã chụp
+            {readyCount}/{VEHICLE_PHOTO_KEYS.length} góc đạt
           </span>
         }
       >
         <Button variant="ghost" onClick={requestLeave} disabled={isSubmitting}>
           Huỷ
         </Button>
-        <Button onClick={handleSubmit} disabled={!files || isSubmitting}>
+        <Button onClick={handleSubmit} disabled={!files || readyCount < VEHICLE_PHOTO_KEYS.length || isSubmitting}>
           {isSubmitting ? <Loader2 className="animate-spin" /> : <Sparkles />}
           {isSubmitting ? 'Đang tải ảnh lên…' : 'Gửi AI kiểm tra hư hại'}
         </Button>
