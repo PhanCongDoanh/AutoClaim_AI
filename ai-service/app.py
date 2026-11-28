@@ -20,13 +20,13 @@ from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 load_dotenv(Path(__file__).with_name(".env"))
 
 import db  # noqa: E402
-from detector import DamageAnalyzer, decode_image  # noqa: E402
+from detector import DamageAnalyzer, decode_image, validate_slot_pipeline  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("autoclaim-ai")
@@ -60,6 +60,27 @@ app = FastAPI(title="AutoClaim AI Service", lifespan=lifespan)
 def health():
     return {"status": "ok", "damageClasses": analyzer.damage_model.names if analyzer else None,
             "partModel": analyzer is not None and analyzer.part_model is not None}
+
+
+@app.post("/validate-slot")
+@app.post("/api/ai/validate-slot")
+async def validate_slot_endpoint(
+    image: UploadFile = File(...),
+    reference_image: UploadFile | None = File(None),
+    expected_angle: str = Form(...),
+    inspection_type: str = Form("CHECK_IN"),
+):
+    if not analyzer:
+        raise HTTPException(503, "DamageAnalyzer chưa được khởi tạo")
+    img_bytes = await image.read()
+    ref_bytes = await reference_image.read() if reference_image is not None else None
+    return validate_slot_pipeline(
+        analyzer,
+        image_bytes=img_bytes,
+        reference_bytes=ref_bytes,
+        expected_angle=expected_angle,
+        inspection_type=inspection_type,
+    )
 
 
 @app.post("/api/ai/detect", status_code=202)

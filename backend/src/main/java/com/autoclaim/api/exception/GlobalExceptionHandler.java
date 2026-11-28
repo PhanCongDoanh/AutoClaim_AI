@@ -32,6 +32,18 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
     }
 
+    @ExceptionHandler(ValidationFailedException.class)
+    public ResponseEntity<ErrorResponse> handleValidationFailed(ValidationFailedException ex, HttpServletRequest request) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        if (ex.getErrorCode() != null) {
+            details.put("errorCode", ex.getErrorCode());
+        }
+        if (ex.getDetails() != null) {
+            details.putAll(ex.getDetails());
+        }
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), request, null, details);
+    }
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErrorResponse> handleConflict(ConflictException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request, null, ex.getDetails());

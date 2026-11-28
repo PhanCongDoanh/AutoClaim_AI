@@ -18,6 +18,14 @@ public interface InspectionService {
 
     InspectionResponseDto checkOut(CheckOutRequest request, List<MultipartFile> images);
 
+    com.autoclaim.api.dto.response.SlotValidationResponseDto validateSlot(
+            UUID vehicleId,
+            UUID bookingId,
+            com.autoclaim.api.entity.enums.AngleCode angleCode,
+            com.autoclaim.api.entity.enums.SessionType sessionType,
+            MultipartFile image,
+            List<String> clientHashes);
+
     SessionResultResponseDto getSessionResults(UUID sessionId);
 
     /** Live AI progress of a CHECK_OUT session, falling back to the stored {@code ai_status}. */

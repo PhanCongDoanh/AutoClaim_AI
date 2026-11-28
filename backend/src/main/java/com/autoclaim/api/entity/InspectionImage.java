@@ -49,6 +49,22 @@ public class InspectionImage {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    @Builder.Default
+    @Column(name = "is_valid")
+    private Boolean isValid = true;
+
+    @Column(name = "detected_angle", length = 50)
+    private String detectedAngle;
+
+    @Column(name = "deviation_percent")
+    private Double deviationPercent;
+
+    @Column(name = "alignment_reliable")
+    private Boolean alignmentReliable;
+
+    @Column(name = "error_code", length = 50)
+    private String errorCode;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

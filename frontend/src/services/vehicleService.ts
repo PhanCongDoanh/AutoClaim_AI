@@ -29,4 +29,12 @@ export const vehicleService = {
     )
     return data
   },
+
+  /** 8 standard reference images mapped by angle code (ANGLE_1 to ANGLE_8). */
+  async getReferences(vehicleId: UUID): Promise<Record<string, string>> {
+    const { data } = await axiosInstance.get<Record<string, string>>(
+      `/vehicles/${vehicleId}/references`,
+    )
+    return data
+  },
 }

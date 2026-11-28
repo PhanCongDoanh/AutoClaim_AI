@@ -2,7 +2,7 @@ import { CircleCheck, Lock } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AngleDiagram } from '@/components/inspection/AngleDiagram'
 import { PhotoCaptureBox } from '@/components/inspection/PhotoCaptureBox'
-import { ANGLE_LABELS, VEHICLE_PHOTO_KEYS } from '@/components/inspection/photoAngles'
+import { ANGLE_LABELS, DEMO_ANGLE_IMAGES, VEHICLE_PHOTO_KEYS } from '@/components/inspection/photoAngles'
 import { isSlotReady, type PhotoSlot } from '@/hooks/usePhotoCapture'
 import { cn } from '@/lib/utils'
 import { CHECK_IN_CARD_CLASS } from '@/pages/staff/check-in/SectionCardHeader'
@@ -21,6 +21,8 @@ interface VehicleAnglesStepProps {
   aside?: ReactNode
   /** Check-in photo per angle, shown as a small reference in the corner of each box. */
   referenceUrls?: Partial<Record<AngleCode, string>>
+  /** Session type */
+  sessionType?: 'CHECK_IN' | 'CHECK_OUT'
 }
 
 /** Angle diagram + 8 capture boxes, shared by check-in and check-out. */
@@ -33,6 +35,7 @@ export function VehicleAnglesStep({
   note,
   aside,
   referenceUrls,
+  sessionType = 'CHECK_IN',
 }: VehicleAnglesStepProps) {
   const total = VEHICLE_PHOTO_KEYS.length
   const isComplete = readyCount === total
@@ -94,6 +97,8 @@ export function VehicleAnglesStep({
               onSelect={(file) => onCapture(key, file)}
               disabled={disabled}
               referenceUrl={referenceUrls?.[key]}
+              demoImageUrl={DEMO_ANGLE_IMAGES[key]}
+              sessionType={sessionType}
             />
           ))}
         </div>
@@ -102,8 +107,8 @@ export function VehicleAnglesStep({
           <div className="flex items-start gap-3 rounded-xl border border-blue-200/80 bg-[#eef4ff] px-4 py-3 text-[14px] text-slate-700">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
             <p>
-              Khi bấm <strong className="text-slate-900">Xác nhận cho thuê</strong>, 8 ảnh được lưu làm ảnh gốc của
-              phiên thuê và xe tự động chuyển sang <strong className="text-slate-900">Đang thuê</strong>.
+              Khi bấm <strong className="text-slate-900">Xác nhận cho thuê</strong>, 8 ảnh hợp lệ sẽ được lưu làm bộ ảnh gốc của
+              phiên thuê.
             </p>
           </div>
         )}

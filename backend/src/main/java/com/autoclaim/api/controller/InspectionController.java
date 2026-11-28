@@ -8,6 +8,9 @@ import com.autoclaim.api.dto.response.InspectionHistoryItemDto;
 import com.autoclaim.api.dto.response.InspectionResponseDto;
 import com.autoclaim.api.dto.response.PageResponseDto;
 import com.autoclaim.api.dto.response.SessionResultResponseDto;
+import com.autoclaim.api.dto.response.SlotValidationResponseDto;
+import com.autoclaim.api.entity.enums.AngleCode;
+import com.autoclaim.api.entity.enums.SessionType;
 import com.autoclaim.api.service.InspectionHistoryService;
 import com.autoclaim.api.service.InspectionService;
 import com.autoclaim.api.service.ReportService;
@@ -48,6 +51,22 @@ public class InspectionController {
     private final InspectionService inspectionService;
     private final ReportService reportService;
     private final InspectionHistoryService inspectionHistoryService;
+
+    @Operation(
+            summary = "Pre-validate single inspection image slot",
+            description = "Validates quality, viewpoint angle, duplicate check, and alignment deviation (<= 20%) against reference."
+    )
+    @PostMapping(value = "/validate-slot", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SlotValidationResponseDto> validateSlot(
+            @RequestParam(required = false) UUID vehicleId,
+            @RequestParam(required = false) UUID bookingId,
+            @RequestParam AngleCode angleCode,
+            @RequestParam SessionType sessionType,
+            @RequestPart("image") MultipartFile image,
+            @RequestParam(required = false) List<String> clientHashes) {
+        return ResponseEntity.ok(inspectionService.validateSlot(
+                vehicleId, bookingId, angleCode, sessionType, image, clientHashes));
+    }
 
     @Operation(
             summary = "Vehicle Check-In",

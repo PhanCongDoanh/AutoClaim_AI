@@ -42,6 +42,12 @@ public class VehicleController {
         return ResponseEntity.ok(vehicleService.countByStatus());
     }
 
+    @Operation(summary = "Get vehicle reference images", description = "Returns 8 standard reference image URLs mapped by angle code (ANGLE_1 to ANGLE_8).")
+    @GetMapping("/{id}/references")
+    public ResponseEntity<Map<String, String>> getVehicleReferences(@PathVariable UUID id) {
+        return ResponseEntity.ok(vehicleService.getReferenceImages(id));
+    }
+
     @Operation(summary = "Complete vehicle maintenance", description = "MAINTENANCE → AVAILABLE. maintenanceNotes (max 1000 chars, else 400) are stored on the latest COMPLETED booking; without one the vehicle is still released and notesSaved=false. 409 when the vehicle is not under maintenance.")
     @PatchMapping("/{id}/complete-maintenance")
     public ResponseEntity<VehicleResponseDto> completeMaintenance(

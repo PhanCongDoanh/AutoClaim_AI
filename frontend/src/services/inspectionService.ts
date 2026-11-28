@@ -9,12 +9,46 @@ import type {
   OverrideDamageRequest,
   PageResponse,
   SessionResultResponse,
+  SlotValidationResult,
   UUID,
 } from '../types'
 import { axiosInstance } from '@/utils/axiosInstance'
 import { buildInspectionFormData } from './apiClient'
 
 export const inspectionService = {
+  /** Pre-validates a single vehicle angle slot against reference image, quality, and viewpoint. */
+  async validateSlot(
+    params: {
+      vehicleId?: UUID
+      bookingId?: UUID
+      angleCode: string
+      sessionType: 'CHECK_IN' | 'CHECK_OUT'
+      image: File
+      clientHashes?: string[]
+    },
+    signal?: AbortSignal,
+  ): Promise<SlotValidationResult> {
+    const formData = new FormData()
+    formData.append('image', params.image)
+    const searchParams = new URLSearchParams()
+    if (params.vehicleId) searchParams.append('vehicleId', params.vehicleId)
+    if (params.bookingId) searchParams.append('bookingId', params.bookingId)
+    searchParams.append('angleCode', params.angleCode)
+    searchParams.append('sessionType', params.sessionType)
+    if (params.clientHashes && params.clientHashes.length > 0) {
+      params.clientHashes.forEach((h) => searchParams.append('clientHashes', h))
+    }
+    const { data } = await axiosInstance.post<SlotValidationResult>(
+      `/inspections/validate-slot?${searchParams.toString()}`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        signal,
+      },
+    )
+    return data
+  },
+
   async checkIn(request: CheckInRequest, images: File[]): Promise<InspectionResponse> {
     const { data } = await axiosInstance.post<InspectionResponse>(
       '/inspections/check-in',
